@@ -35,7 +35,7 @@ Additionally, the app exposes some settings for the user to control how often th
 
 ![Alt text](https://dennisbabkin.com/php/images/w10urb_sttgs.png "Windows 10 Update Restart Blocker - Settings window")
 
-The binary app comes with its own MSI installer that can be used for the installation on a standalone Windows 10 system, or for the installation on multiple computers joined into a domain via a Group Policy Object (GPO) in a Windows Active Directory.
+The binary app comes with its own MSI installer that can be used for the installation on a standalone Windows 10 system, or for the installation on multiple computers joined into a domain via a Group Policy Object (GPO) in a Windows Active Directory. [Read here](https://dennisbabkin.com/php/docs.php?what=w10urb#installation) for more details.
 
 ### Release Build
 
