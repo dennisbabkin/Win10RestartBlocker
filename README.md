@@ -63,7 +63,7 @@ To build this project you will need the following:
 
   Make sure to download and install the [WiX Toolset library](https://wixtoolset.org/) to build the installer.
   
-  To build the MSI installer, make sure to build the binaries first from the `Win10RestartBlocker.sln` solution. Then go to `Build` -> `Rebuild Solution` to build the MSI.
+  To build the MSI installer, make sure to build the binaries from the `Win10RestartBlocker.sln` solution first. Then go to `Build` -> `Rebuild Solution` to build the MSI.
   
 
 
