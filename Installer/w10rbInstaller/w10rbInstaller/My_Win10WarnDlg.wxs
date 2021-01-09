@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <!--
+   
+      Windows 10 Update Restart Blocker
+      "Control forced restarts from Windows Updates & custom patch for its vulnerability bug."
+      Copyright (c) 2021 www.dennisbabkin.com
+      
+          https://dennisbabkin.com/w10urb
+      
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+      You may obtain a copy of the License at
+      
+          https://www.apache.org/licenses/LICENSE-2.0
+      
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License.
+
+  -->
+
+  <Fragment>
+    <UI>
+      <Dialog Id="My_Win10WarnDlg" Width="370" Height="270" Title="!(loc.SetupTypeDlg_Title)">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.SetupTypeDlgBannerBitmap)" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Operating System Information" />
+
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="Please read the following message concerning your operating system" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+
+        <Control Id="Icon" Type="Icon" X="20" Y="70" Width="32" Height="32" ToolTip="Information icon" FixedSize="yes" IconSize="32" Text="Exclam.ico">
+          <Binary Id="Exclam.ico" SourceFile="Exclam.ico" />
+        </Control>
+
+        <Control Id="TextMsg1" Type="Text" X="62" Y="72" Width="290" Height="16" Text="Your operating system already supports features implemented by this software." />
+        
+        <Control Id="TextMsg2" Type="Hyperlink" ToolTip="Click to open in your web browser" X="62" Y="100" Width="290" Height="32">
+          <Text><![CDATA[You can indefinitely postpone updates without installing this software by following instructions described in <a href="https://dennisbabkin.com/blog/?i=AAA00600">this blog post</a>.]]></Text>
+        </Control>
+        <Control Id="TextMsg3" Type="Hyperlink" ToolTip="Click to open in your web browser" X="62" Y="130" Width="290" Height="32" >
+          <Text><![CDATA[Optionally, you may install this software if you want to add the custom system vulnerability patch, described in <a href="https://dennisbabkin.com/blog/">this blog post</a>.]]></Text>
+        </Control>
+
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Text="!(loc.WixUINext)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+
+      </Dialog>
+    </UI>
+  </Fragment>
+</Wix>

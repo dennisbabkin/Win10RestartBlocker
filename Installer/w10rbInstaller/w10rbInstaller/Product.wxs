@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <!--
+   
+      Windows 10 Update Restart Blocker
+      "Control forced restarts from Windows Updates & custom patch for its vulnerability bug."
+      Copyright (c) 2021 www.dennisbabkin.com
+      
+          https://dennisbabkin.com/w10urb
+      
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+      You may obtain a copy of the License at
+      
+          https://www.apache.org/licenses/LICENSE-2.0
+      
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License.
+
+  -->
+
+  
+  <!-- Current MSI build options -->
+
+  <!-- DO NOT use the 4th digit! -->
+  <?define VersionThis = "1.1.0" ?>
+
+  <!-- Previous versions of the this installer:
+       INFO: Must be changed for every version!
+        {F21A30EF-4E02-4475-B13E-BAB909080263} = v.1.0.0
+        {E32C6C91-0A69-4848-A7A5-C8D4F377B949} = v.1.1.0
+  -->
+  <?define ProductCode = "{E32C6C91-0A69-4848-A7A5-C8D4F377B949}" ?>
+
+
+  <!-- 
+        For unattended installation (without GUI) use the following command line calls:
+        
+        - To install with default features (install program, and put start menu shortcuts):
+           msiexec.exe /qn /i "installer_name.msi"
+           
+        - To install with (or add) specific features:
+           msiexec.exe /qn /i "installer_name.msi" ADDLOCAL=<Features>
+           
+           where, <Features> is a comma-separated list of the following features that you'd like to install:
+         
+            MainProgram        for main program (must be specified)
+            ShortcutsStart     for Start menu shortcuts
+
+        - To remove specific features when the app is already installed:
+           msiexec.exe /qn /i "installer_name.msi" REMOVE=<Features>
+           
+           where, <Features> is a comma-separated list of the features that you'd like to remove (see above.)
+
+        - To uninstall:
+           msiexec.exe /qn /x "installer_name.msi"
+  -->
+
+
+  <?define CompanyThis = "www.dennisbabkin.com" ?>
+  <?define ProductThis = "Windows 10 Update Restart Blocker" ?>
+
+  <!-- IMPORTANT: If 'ProductFullName' is changed here, make sure to adjust it in clcGui project, in __threadGetInstanceIDProc_RAW() method! -->
+  <?define ProductFullName = $(var.ProductThis) v.$(var.VersionThis) ?>
+  <?define AppDescr = $(var.ProductThis) - System Vulnerability Patch ?>
+
+  <!-- DO NOT CHANGE!!! -->
+  <?define UpgradeCode = "{F8F72030-AF23-48AB-97A5-61254F3D5AA9}" ?>
+
+  <?if $(var.ThisBuild) != "Release" ?>
+  <!-- ALWAYS BUILD AS A RELEASE CONFIGURATION! -->
+  <?error "Build it as a Release configuration!"?>
+  <?endif?>
+
+
+
+  <!-- Paths where to take source files for installation -->
+  <?define SourceFldrCA = "..\..\..\..\Win10RestartBlocker\Release\" ?>
+
+
+  <Product Id="$(var.ProductCode)" Name="$(var.ProductFullName)" Language="1033" Version="$(var.VersionThis)" Manufacturer="$(var.CompanyThis)" UpgradeCode="$(var.UpgradeCode)">
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine"
+             SummaryCodepage="1252" Keywords="Installer"
+             Description="$(var.ProductFullName) Installer"
+             Comments='Copyright (C) www.dennisbabkin.com. All rights reserved.'
+             Manufacturer='$(var.CompanyThis)'/>
+
+    <!-- Additional properties for the installer package -->
+    <Property Id="ARPCOMMENTS" Value="$(var.AppDescr)" Secure="yes" />
+    <Property Id="ARPCONTACT" Value="support@dennisbabkin.com" Secure="yes" />
+    <Property Id="ARPHELPLINK" Value="https://dennisbabkin.com/php/docs.php?what=w10urb&amp;ver=$(var.VersionThis)" Secure="yes" />
+    <Property Id="ARPURLINFOABOUT" Value="https://dennisbabkin.com/w10urb" Secure="yes" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://www.dennisbabkin.com/php/update.php?name=w10urb&amp;ver=$(var.VersionThis)" Secure="yes" />
+
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="DisableShutdown"/>
+
+    <Property Id='DiskPrompt' Value="$(var.ProductFullName) Installation [1]" />
+
+    <Icon Id="icon.ico" SourceFile="w10rbu_icon.ico"/>
+    <Property Id="ARPPRODUCTICON" Value="icon.ico" />
+
+    <MajorUpgrade DowngradeErrorMessage="Cannot continue installation of [ProductName]. A newer version is already installed..." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <SetProperty Id="MANUAL_URL" Value="https://dennisbabkin.com/php/docs.php?what=w10urb&amp;ver=$(var.VersionThis)" Sequence="execute" Before="CreateShortcuts" />
+
+
+    <!-- Check that we're running on Windows 10 -->
+    <Property Id="CHK_WIN10">
+      <DirectorySearch Id="searchSystemW10" Path="[SystemFolder]" Depth="0">
+        <FileSearch Id="searchFileW10" Name="advapi32.dll" MinVersion="6.3.10000.0"/>
+      </DirectorySearch>
+    </Property>
+
+    <PropertyRef Id="CHK_WIN10"/>
+    <Condition Message="$(var.ProductThis) can be installed on Windows 10 only!">
+      <![CDATA[Installed OR CHK_WIN10]]>
+    </Condition>
+
+
+
+    <Directory Id='TARGETDIR' Name='SourceDir'>
+      <Directory Id='ProgramFilesFolder' Name='InstallFolder'>
+        <Directory Id='idDb.com' Name='dennisbabkin.com'>
+          <Directory Id='INSTALLDIR' Name='$(var.ProductThis)' >
+
+            <Component Id='CompIDeula' Guid='{198CB549-CB99-4227-BAA0-DF42A753BFF7}'>
+              <File Id='clcEULA' Name='EULA.rtf' DiskId='1' Source='EULA - w10rb.rtf' Vital='no' KeyPath='yes' />
+            </Component>
+
+
+            <Component Id='CompIDShortcutsStart' Guid='{4D3A3683-7C94-4D22-B2EC-415E79839034}'>
+              
+              <RegistryValue Id="RegShortcutStart" Root="HKCU" Key="Software\www.dennisbabkin.com\Win10RestartBlocker"
+                             Name="StartMenuShortcut" Value="1" Type="integer" KeyPath="yes" />
+              
+              <Shortcut Id="startmenuW10URBGui" Directory="ProgramMenuDir" Target="[INSTALLDIR]Win10RestartBlockerUI.exe"
+                        Name="$(var.ProductThis) - Settings" WorkingDirectory='INSTALLDIR' Advertise='no'
+                        Description="Shows settings for $(var.ProductThis)"
+                        Icon="icon.ico" IconIndex="0" />
+
+              <Shortcut Id="startmenuOnlineMnl" Directory="ProgramMenuDir" Name="Online Manual - $(var.ProductThis)"
+                        Description="Online Manual for $(var.ProductThis)" Target="[MANUAL_URL]" Icon="IconWebBrowser">
+                <Icon Id="IconWebBrowser" SourceFile="web_icon.ico" />
+              </Shortcut>
+
+              <Shortcut Id="startmenuW10URBUninst" Directory="ProgramMenuDir" Target="[SystemFolder]msiexec.exe" Arguments="/x [ProductCode]"
+                        Name="Uninstall - $(var.ProductThis)" WorkingDirectory='SystemFolder' Advertise='no'
+                        Description="Uninstalls $(var.ProductThis)" />
+            </Component>
+
+            
+            
+          </Directory>
+        </Directory>
+      </Directory>
+
+
+      <Directory Id="ProgramMenuFolder" Name="Programs">
+        <Directory Id="ProgramMenuDir" Name="$(var.ProductThis)">
+          <Component Id="ProgramMenuDir" Guid="{7B9AE339-B0C7-4622-8F4B-42FB9BB0D958}">
+            <RemoveFolder Id='ProgramMenuDir' On='uninstall' />
+            <RegistryValue Root='HKCU' Key='Software\www.dennisbabkin.com\Win10RestartBlocker' Type='integer' Name='8923332' Value='1' KeyPath='yes' />
+          </Component>
+        </Directory>
+      </Directory>
+
+
+    </Directory>
+      
+
+
+
+    <Feature Id='Complete' Title='$(var.ProductThis)' Description='Software files.'
+      Display='expand' Level='1' ConfigurableDirectory='INSTALLDIR' Absent='disallow' AllowAdvertise='no' InstallDefault='local' >
+
+    
+      <Feature Id='MainProgram' Title='Configuration GUI App'
+               Description="Installs the configuration GUI app for the program."
+               Absent='disallow'
+               AllowAdvertise='no'
+               Level='1'>
+
+        <ComponentRef Id='CompIDeula' />
+
+      </Feature>
+
+
+      <Feature Id='ShortcutsStart' Title='Start Menu Shortcuts'
+               AllowAdvertise='no'
+               Absent='allow'
+               Description="Places software shortcuts into the Windows Start Menu."
+               Level='1'>
+
+        <ComponentRef Id='CompIDShortcutsStart'/>
+        <ComponentRef Id='ProgramMenuDir' />
+
+      </Feature>
+
+
+    </Feature>
+
+    
+    
+    <CustomAction Id="CA_SetProperties_Initialize" Property="idCA_FirstStage"
+                  Value="[Installed]|||[REINSTALL]|||[UPGRADINGPRODUCTCODE]|||[REMOVE]|||[INSTALLDIR]|||[SourceDir]" />
+
+    <CustomAction Id="CA_SetProperties_Finalize" Property="idCA_LastStage"
+                  Value="[Installed]|||[REINSTALL]|||[UPGRADINGPRODUCTCODE]|||[REMOVE]|||[INSTALLDIR]|||[SourceDir]" />
+
+    <Binary Id="caBinDll" SourceFile="$(var.SourceFldrCA)caW10URBInstaller.dll" />
+
+    <CustomAction Id="idCA_FirstStage" Impersonate="no" Execute="deferred" BinaryKey="caBinDll" DllEntry="caFirstStage" Return="check" />
+    <CustomAction Id="idCA_LastStage" Impersonate="no" Execute="deferred" BinaryKey="caBinDll" DllEntry="caLastStage" Return="check" />
+
+
+    <!-- Define order of execution of our custom actions -->
+    <InstallExecuteSequence>
+      <Custom Action='CA_SetProperties_Initialize' After='InstallInitialize'></Custom>
+      <Custom Action='idCA_FirstStage' After='CA_SetProperties_Initialize'></Custom>
+
+      <Custom Action='CA_SetProperties_Finalize' Before='InstallFinalize'></Custom>
+      <Custom Action='idCA_LastStage' After='CA_SetProperties_Finalize'></Custom>
+
+    </InstallExecuteSequence>
+
+
+    <!-- The following is needed to run an app after install finishes-->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Show setup window" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[INSTALLDIR]Win10RestartBlockerUI.exe" />
+    <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="yes" />
+
+
+    <UIRef Id='My_WixUI_Mondo' />
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+
+
+    <WixVariable Id="WixUIDialogBmp" Value="w10urb-dialog.bmp" />
+    <WixVariable Id="WixUIBannerBmp" Value="w10urb-top-banner.bmp" />
+
+    <WixVariable Id="WixUILicenseRtf" Value="EULA - w10rb.rtf" />
+
+  </Product>
+
+  
+  
+  <!-- Below are UI customizations -->
+  <Fragment>
+
+    <!--
+      Try to locate gpedit.msc in the system folder. If it's present, this means that the user
+      can control GPOs and thus doesn't need this software.
+    -->
+    <Property Id="GPEDIT">
+      <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
+        <FileSearch Id="searchFile" Name="gpedit.msc" />
+      </DirectorySearch>
+    </Property>
+
+    
+    
+    <UI Id="My_WixUI_Mondo">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WixUI_Mode" Value="Mondo" />
+
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg">NOT Installed AND NOT PATCH AND NOT GPEDIT</Publish>
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="My_Win10WarnDlg">NOT Installed AND NOT PATCH AND GPEDIT</Publish>
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg">Installed OR PATCH</Publish>
+
+      <Publish Dialog="My_Win10WarnDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
+      <Publish Dialog="My_Win10WarnDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
+
+      <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">NOT GPEDIT</Publish>
+      <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="My_Win10WarnDlg">GPEDIT</Publish>
+      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg">LicenseAccepted = "1"</Publish>
+
+      <Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg"><![CDATA[WixUI_InstallMode = "Change"]]></Publish>
+      <Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg">NOT Installed AND NOT PATCH</Publish>
+      <Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">Installed OR PATCH</Publish>
+      <Publish Dialog="CustomizeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="CustomizeDlg"><![CDATA[WixUI_InstallMode <> "Repair" AND WixUI_InstallMode <> "Remove"]]></Publish>
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg"><![CDATA[WixUI_InstallMode = "Repair" OR WixUI_InstallMode = "Remove"]]></Publish>
+
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg">1</Publish>
+
+      <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton" Event="NewDialog" Value="CustomizeDlg">1</Publish>
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg">1</Publish>
+
+      <!-- Enables launching application after installation -->
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+
+    </UI>
+
+    <UIRef Id="WixUI_Common" />
+
+  </Fragment>
+
+
+
+</Wix>
