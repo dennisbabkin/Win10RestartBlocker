@@ -24,7 +24,7 @@
 #pragma once
 
 #define MAIN_APP_NAME L"Windows 10 Update Restart Blocker"
-#define MAIN_APP_VER L"1.1.0"								//Main app version (don't use the 4th digit for compatibility with MSI)
+#define MAIN_APP_VER L"1.2.0"								//Main app version (don't use the 4th digit for compatibility with MSI) - if changed here, make sure to change Version in resources too!
 
 #define EVENT_LOG_APP_NAME MAIN_APP_NAME
 
@@ -72,9 +72,20 @@
 
 #define MAX_ALLOWED_DONT_SHOW_POPUP_IN_MINS (12 * 7 * 24 * 60)			//Expressed in minutes (inclusively allowed value)
 
-#define SHELL_CHROME_API_ID_STAMP 0xB096E01E
-
 #define EVENT_NAME_GUI_APP_CLOSE_NOW L"293BD41D-ED4E-484B-B215-CCC4F8A6A38B"		//[Manual] event that can be set from outside to close the GUI settings app
+
+
+//Macro to export a function
+#define EXPORTED_C_FUNCTION __pragma(comment(linker, "/EXPORT:" __FUNCTION__ "=" __FUNCDNAME__))
+
+
+//Macros for testing variadic functions
+#if _MSC_VER >= 1916
+#define CHECK_VARIADIC(f, ...) (_sntprintf_s(NULL, 0, 0, __VA_ARGS__), f(__VA_ARGS__))
+#define CHECK_VARIADIC_P1(f, p, ...) (_sntprintf_s(NULL, 0, 0, __VA_ARGS__), f(p, __VA_ARGS__))
+#else
+#error Your_compiler_doesnt_support_it
+#endif
 
 
 

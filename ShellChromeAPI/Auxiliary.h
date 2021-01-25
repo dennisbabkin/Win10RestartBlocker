@@ -44,7 +44,7 @@
 
 
 
-//Custom made assertion definition
+//Custom assertion definitions
 #ifdef _DEBUG
 #define ASSERT(f) if(!(f))\
 {\
@@ -214,6 +214,22 @@ enum VER_CMP_RES {
 };
 
 
+
+struct SECURITY_DESCRIPTOR_W_LABEL {
+	SECURITY_DESCRIPTOR sd;
+
+	struct : public ::ACL
+	{
+		ACE_HEADER Ace;
+		ACCESS_MASK Mask;
+		SID Sid;
+	} Label;
+
+	SECURITY_DESCRIPTOR_W_LABEL()
+	{
+		memset(this, 0, sizeof(*this));
+	}
+};
 
 
 
@@ -389,7 +405,7 @@ struct AUX_FUNCS
 
 	static BOOL CreateHKLMSharedKey()
 	{
-		//Create HTML shared key that can be read/written to from a service and from a user account
+		//Create Registry shared key that can be read/written to from a service and from a user account
 		//RETURN:
 		//		= TRUE if success
 		//		= FALSE if failed (check GetLastError() if error)
@@ -706,27 +722,11 @@ struct AUX_FUNCS
 				size_t nchLn = pEnd - buffName;
 				if (nchLn < USHRT_MAX / sizeof(WCHAR))
 				{
-					//Create DACL for access to everyone (including processes with untrusted DACL)
-					static const SID UntrustedSid = {
-						SID_REVISION, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, { SECURITY_MANDATORY_UNTRUSTED_RID }
-					};
-
-					struct : public ::ACL
+					//Create DACL for access to everyone (including processes with untrusted MIL)
+					SECURITY_DESCRIPTOR_W_LABEL sd4e;
+					if (get_SECURITY_DESCRIPTOR_FullAccess(sd4e))
 					{
-						ACE_HEADER Ace;
-						ACCESS_MASK Mask;
-						SID Sid;
-					} Label;
-
-					SECURITY_DESCRIPTOR sd;
-					if (::InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION) &&
-						::InitializeAcl(&Label, sizeof(Label), ACL_REVISION) &&
-						::AddMandatoryAce(&Label, ACL_REVISION, 0, 0, const_cast<SID*>(&UntrustedSid)) &&
-						::SetSecurityDescriptorSacl(&sd, TRUE, &Label, FALSE) &&
-						::SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE) &&
-						::SetSecurityDescriptorControl(&sd, SE_DACL_PROTECTED, SE_DACL_PROTECTED))
-					{
-						SECURITY_ATTRIBUTES sa = { sizeof(sa), &sd, FALSE };
+						SECURITY_ATTRIBUTES sa = { sizeof(sa), &sd4e.sd, FALSE };
 
 						hEvent = ::CreateEventEx(&sa, buffName, 
 							(bAutoReset ? 0 : CREATE_EVENT_MANUAL_RESET) | (bInitialState ? CREATE_EVENT_INITIAL_SET : 0),
@@ -745,6 +745,30 @@ struct AUX_FUNCS
 		return hEvent;
 	}
 
+	static BOOL get_SECURITY_DESCRIPTOR_FullAccess(SECURITY_DESCRIPTOR_W_LABEL& sd)
+	{
+		//Fill in security descriptor in 'sd' with access to everyone (including processes with untrusted MIL)
+		//RETURN:
+		//		= TRUE if success
+		//		= FALSE if error (check GetLastError() for info)
+
+		//Create DACL for access to everyone (including processes with untrusted MIL)
+		static const SID UntrustedSid = {
+			SID_REVISION, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, { SECURITY_MANDATORY_UNTRUSTED_RID }
+		};
+
+		if (::InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION) &&
+			::InitializeAcl(&sd.Label, sizeof(sd.Label), ACL_REVISION) &&
+			::AddMandatoryAce(&sd.Label, ACL_REVISION, 0, 0, const_cast<SID*>(&UntrustedSid)) &&
+			::SetSecurityDescriptorSacl(&sd, TRUE, &sd.Label, FALSE) &&
+			::SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE) &&
+			::SetSecurityDescriptorControl(&sd, SE_DACL_PROTECTED, SE_DACL_PROTECTED))
+		{
+			return TRUE;
+		}
+
+		return FALSE;
+	}
 
 	static const WCHAR* getFormattedErrorMsg(int nOSError, WCHAR* pBuffer, size_t szchBuffer)
 	{
@@ -772,7 +796,7 @@ struct AUX_FUNCS
 				if(lpMsgBuf)
 				{	
 					::StringCchCopy(pBuffer, szchBuffer, (LPCTSTR)lpMsgBuf);
-					LocalFree(lpMsgBuf);
+					::LocalFree(lpMsgBuf);
 				}
 
 				//Safety null
@@ -785,19 +809,88 @@ struct AUX_FUNCS
 			}
 		}
 		else
-			ASSERT(NULL);
+			assert(NULL);
 
 		::SetLastError(nPrev_OSError);
 		return pBuffer;
 	}
 
+private:
+	static HMODULE _getDPI_APIs_ptrs(UINT(WINAPI **ppfnGetDpiForWindow)(HWND hwnd) = NULL)
+	{
+		static HMODULE hModUser32 = NULL;
+		static UINT(WINAPI *pfnGetDpiForWindow)(HWND hwnd) = NULL;
+
+		if (!hModUser32)
+		{
+			hModUser32 = ::GetModuleHandle(L"User32.dll");
+			assert(hModUser32);
+		}
+
+		if (!pfnGetDpiForWindow)
+		{
+			(FARPROC&)pfnGetDpiForWindow = ::GetProcAddress(hModUser32, "GetDpiForWindow");
+			assert(pfnGetDpiForWindow);
+		}
+
+		if(ppfnGetDpiForWindow)
+			*ppfnGetDpiForWindow = pfnGetDpiForWindow;
+
+		return hModUser32;
+	}
+
+public:
+
+	static int GetSystemMetricsWithDPI(int nIndex, HWND hWnd)
+	{
+		//'hWnd' = window handle to retrieve a setting for (used for DPI scaling)
+		//RETURN:
+		//		= System metrics setting for 'nIndex' -- see GetSystemMetrics()
+
+		UINT(WINAPI *pfnGetDpiForWindow)(HWND hwnd);
+		HMODULE hModUsr32 = _getDPI_APIs_ptrs(&pfnGetDpiForWindow);
+
+		if (pfnGetDpiForWindow)
+		{
+			int nDpiAwareness = pfnGetDpiForWindow(hWnd);
+			if (nDpiAwareness)
+			{
+				static int (WINAPI *pfnGetSystemMetricsForDpi)(
+					int  nIndex,
+					UINT dpi
+					) = NULL;
+
+				if (!pfnGetSystemMetricsForDpi)
+				{
+					assert(hModUsr32);
+					(FARPROC&)pfnGetSystemMetricsForDpi = ::GetProcAddress(hModUsr32, "GetSystemMetricsForDpi");
+					assert(pfnGetSystemMetricsForDpi);
+				}
+
+				if (pfnGetSystemMetricsForDpi)
+				{
+					//Invoke newer API
+					return pfnGetSystemMetricsForDpi(nIndex, nDpiAwareness);
+				}
+				else
+					assert(false);
+			}
+			else
+				assert(false);
+		}
+		else
+			assert(false);
+
+		//Fallback
+		return ::GetSystemMetrics(nIndex);
+	}
 
 	static BOOL GetDPI(HWND hWnd, double* pfOutX = NULL, double* pfOutY = NULL)
 	{
 		//Get current DPI setting for 'hWnd' window
 		//INFO: Usually X and Y axis DPI scaling are the same.
 		//'pfOutX' = if not NULL, DPI scaling along the x-axis.
-		//'pfOutY' = if not NULL, DPI scaling along the x-axis.
+		//'pfOutY' = if not NULL, DPI scaling along the y-axis. (Old - don't use!)
 		//RETURN:
 		//		= TRUE if success
 		//		= FALSE if failed (in this case 'pfOutX' and 'pfOutY' will be set to 1.0)
@@ -805,25 +898,48 @@ struct AUX_FUNCS
 		double fX = 1.0;
 		double fY = 1.0;
 
-		//Get device context
-		HDC hDC = ::GetDC(hWnd);
-		if(hDC)
-		{
-			//Calculate DPI settings
-			int nCx = ::GetDeviceCaps(hDC, LOGPIXELSX);
-			int nCy = ::GetDeviceCaps(hDC, LOGPIXELSY);
+		//First try newer API
+		UINT (WINAPI *pfnGetDpiForWindow)(HWND hwnd);
+		_getDPI_APIs_ptrs(&pfnGetDpiForWindow);
 
-			if(nCx > 0 &&
-				nCy > 0)
+		if(pfnGetDpiForWindow)
+		{
+			//Will return 0 if error
+			int nDpiAwareness = pfnGetDpiForWindow(hWnd);
+			if (nDpiAwareness > 0)
 			{
 				//Done
-				fX = (double)nCx / 96.0;
-				fY = (double)nCy / 96.0;
+				fY = fX = nDpiAwareness / 96.0;
 
 				bRes = TRUE;
 			}
+			else
+				assert(false);
+		}
+		else
+		{
+			//Fallback method
 
-			::ReleaseDC(hWnd, hDC);
+			//Get device context
+			HDC hDC = ::GetDC(hWnd);
+			if (hDC)
+			{
+				//Calculate DPI settings
+				int nCx = ::GetDeviceCaps(hDC, LOGPIXELSX);
+				int nCy = ::GetDeviceCaps(hDC, LOGPIXELSY);
+
+				if (nCx > 0 &&
+					nCy > 0)
+				{
+					//Done
+					fX = (double)nCx / 96.0;
+					fY = (double)nCy / 96.0;
+
+					bRes = TRUE;
+				}
+
+				::ReleaseDC(hWnd, hDC);
+			}
 		}
 
 		if(pfOutX)
@@ -847,8 +963,20 @@ struct AUX_FUNCS
 		RTL_OSVERSIONINFOEXW ver = {};
 		ver.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOEXW);
 
-		LONG (WINAPI *pfnRtlGetVersion)(RTL_OSVERSIONINFOEXW*);
-		(FARPROC&)pfnRtlGetVersion = GetProcAddress(GetModuleHandle(L"ntdll.dll"), "RtlGetVersion");
+		static LONG (WINAPI *pfnRtlGetVersion)(RTL_OSVERSIONINFOEXW*) = NULL;
+		if (!pfnRtlGetVersion)
+		{
+			static HMODULE hModNtDll = NULL;
+			if (!hModNtDll)
+			{
+				hModNtDll = GetModuleHandle(L"ntdll.dll");
+				assert(hModNtDll);
+			}
+
+			(FARPROC&)pfnRtlGetVersion = GetProcAddress(hModNtDll, "RtlGetVersion");
+			assert(pfnRtlGetVersion);
+		}
+
 		if(pfnRtlGetVersion)
 		{
 			LONG status = pfnRtlGetVersion(&ver);
@@ -861,7 +989,7 @@ struct AUX_FUNCS
 				nOSError = status;
 		}
 		else
-			nOSError = ::GetLastError();
+			nOSError = ERROR_FUNCTION_FAILED;
 
 		if(pOutVer)
 			*pOutVer = ver;
@@ -899,7 +1027,7 @@ struct AUX_FUNCS
 	static BOOL IsCharWhitespace(const WCHAR ch)
 	{
 		//RETURN:
-		//		= TRUE if 'ch' is English whitespace
+		//		= TRUE if 'ch' is an English language whitespace
 		return ch == L' ' || ch == L'\t' ||
 			//Account for other possible whitespaces:
 			ch == 0x85 || ch == 0xA0 ||
@@ -1394,7 +1522,7 @@ struct AUX_FUNCS
 
 	static BOOL _parseRegConfigContents(const WCHAR* pData, size_t szchSz, std::vector<CUSTOM_REG_VALUE>& arrDataOut)
 	{
-		//Read contents of 'pData' string buffer, layed out as such (on each line):
+		//Read contents of 'pData' string buffer, laid out as such (on each line):
 		//  ; comment
 		//	Name = Value
 		//
@@ -1607,7 +1735,7 @@ struct AUX_FUNCS
 					}
 					else if (z == L';' || IsCharWhitespace(z) || IsCharNewline(z))
 					{
-					lbl_end_val_number:
+lbl_end_val_number:
 						//End of value
 						if (!crv.strVal.empty())
 						{
@@ -2205,7 +2333,6 @@ private:
 		return TRUE;
 	}
 
-public:
 
 
 };

@@ -75,14 +75,13 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 {
 	//'nValue' = will be 1 if called from usosvc
 	//RETURN:
-	//		= Doen't matter
+	//		= Doesn't matter
 	//		  (There will be a 2 minute delay in usosvc when this function returns)
 	UINT nRes = 0;
 
-	//This is the exported function
-	#pragma comment(linker, "/EXPORT:" __FUNCTION__ "=" __FUNCDNAME__)
+	//This is the exported "C" function
+	EXPORTED_C_FUNCTION;
 
-	//EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(542, L"Shell_RequestShutdown, v=%d", nValue);
 
 	//Magic input value
 	if(nValue == 1)
@@ -137,7 +136,7 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 				if (FAILED(hr = ::StringCchCopy(buffActiveSessName, _countof(buffActiveSessName), pstrActiveSessName)))
 				{
 					buffActiveSessName[_countof(buffActiveSessName) - 1] = 0;
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(683, L"hr=0x%X", hr);
+					ReportEventLogMsgERROR_Spec_WithFormat(683, L"hr=0x%X", hr);
 				}
 
 				//Free mem
@@ -146,7 +145,7 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 			else
 			{
 				//Failed
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(682, L"s=%d", dwActiveSession);
+				ReportEventLogMsgERROR_Spec_WithFormat(682, L"s=%d", dwActiveSession);
 				buffActiveSessName[0] = 0;
 			}
 
@@ -155,7 +154,7 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 			if(!settings.bBlockEnabled)
 			{
 				//Block is not enabled -- thus always allow
-				EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat(L"Block is disabled, will allow reboot for session (%d):\"%s\".", dwActiveSession, buffActiveSessName);
+				ReportEventLogMsgInfo_WithFormat(L"Block is disabled, will allow reboot for session (%d):\"%s\".", dwActiveSession, buffActiveSessName);
 
 				goto lbl_reboot_msg;
 			}
@@ -166,7 +165,7 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 				//Allow going into idle sleep mode for this thread (in case it was blocked)
 				EXECUTION_STATE prevState = ::SetThreadExecutionState(ES_CONTINUOUS);
 
-				EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat(L"Allowed idle sleep for thread ID=%u, session (%d):\"%s\". Previous ExecState=0x%x", 
+				ReportEventLogMsgInfo_WithFormat(L"Allowed idle sleep for thread ID=%u, session (%d):\"%s\". Previous ExecState=0x%x",
 					::GetCurrentThreadId(), dwActiveSession, buffActiveSessName, prevState);
 			}
 
@@ -195,7 +194,7 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 						//Don't show UI -- it's too soon since it was shown last
 						bShowUI = FALSE;
 
-						EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat(
+						ReportEventLogMsgInfo_WithFormat(
 							L"Will not show reboot UI: elapsed only %.2f min since last showing over allowed %u min minimum. Will silently block reboot. Session (%d):\"%s\".", 
 							fElapsedMin, nMinShowDelayMin, dwActiveSession, buffActiveSessName);
 					}
@@ -212,7 +211,7 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 				{
 					//Failed
 					::SetLastError(dwR);
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_WithFormat(L"Failed to set last UI time for session (%d):\"%s\"", dwActiveSession, buffActiveSessName);
+					ReportEventLogMsgERROR_WithFormat(L"Failed to set last UI time for session (%d):\"%s\"", dwActiveSession, buffActiveSessName);
 				}
 
 
@@ -261,7 +260,7 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 					TRUE))
 				{
 					//Failed
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_WithFormat(L"Main WTSSendMessage failed: ln1=%d, ln2=%d, session (%d):\"%s\"", 
+					ReportEventLogMsgERROR_WithFormat(L"Main WTSSendMessage failed: ln1=%d, ln2=%d, session (%d):\"%s\"",
 						dwchLnTitle, dwchLnMsg, dwActiveSession, buffActiveSessName);
 				}
 			}
@@ -272,7 +271,7 @@ extern "C" UINT WINAPI Shell_RequestShutdown(UINT nValue)
 			if(dwResponse == IDYES)
 			{
 				//User chose to allow to reboot
-				EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat(L"User chose to reboot, session (%d):\"%s\"", dwActiveSession, buffActiveSessName);
+				ReportEventLogMsgInfo_WithFormat(L"User chose to reboot, session (%d):\"%s\"", dwActiveSession, buffActiveSessName);
 
 lbl_reboot_msg:
 				//We will allow reboot to proceed
@@ -323,13 +322,13 @@ lbl_reboot_msg:
 						FALSE))
 					{
 						//Failed to show
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_WithFormat(L"When-will-reboot WTSSendMessage failed: ln1=%d, ln2=%d, session (%d):\"%s\"",
+						ReportEventLogMsgERROR_WithFormat(L"When-will-reboot WTSSendMessage failed: ln1=%d, ln2=%d, session (%d):\"%s\"",
 							dwchLnTitle, dwchLnMsg, dwActiveSession, buffActiveSessName);
 					}
 				}
 				else
 				{
-					EVENT_LOG_REPORTS::ReportEventLogMsgWARNING_WithFormat(L"When-will-reboot WTSSendMessage was skipped as the session (%d):\"%s\" is already logging off...", 
+					ReportEventLogMsgWARNING_WithFormat(L"When-will-reboot WTSSendMessage was skipped as the session (%d):\"%s\" is already logging off...",
 						dwActiveSession, buffActiveSessName);
 				}
 
@@ -337,7 +336,7 @@ lbl_reboot_msg:
 			else if(dwResponse == IDTIMEOUT)
 			{
 				//Timed out
-				EVENT_LOG_REPORTS::ReportEventLogMsgWARNING_WithFormat(L"Message box timed out, will block reboot automatically for session (%d):\"%s\"", 
+				ReportEventLogMsgWARNING_WithFormat(L"Message box timed out, will block reboot automatically for session (%d):\"%s\"",
 					dwActiveSession, buffActiveSessName);
 			}
 			else if(dwResponse != IDNO &&
@@ -345,7 +344,7 @@ lbl_reboot_msg:
 				dwResponse != 0)
 			{
 				//Some unexpected response
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_WithFormat(L"Received bad response: %d for session (%d):\"%s\"", dwResponse, dwActiveSession, buffActiveSessName);
+				ReportEventLogMsgERROR_WithFormat(L"Received bad response: %d for session (%d):\"%s\"", dwResponse, dwActiveSession, buffActiveSessName);
 			}
 
 
@@ -362,24 +361,24 @@ lbl_reboot_msg:
 				if(AUX_FUNCS::AdjustPrivilege(SE_SHUTDOWN_NAME, FALSE, NULL))
 				{
 					//All good!
-					EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat(L"Successfully blocked reboot %s for session (%d):\"%s\"", 
+					ReportEventLogMsgInfo_WithFormat(L"Successfully blocked reboot %s for session (%d):\"%s\"",
 						bUserConsent ? L"after user consent" : L"automatically",
 						dwActiveSession, buffActiveSessName);
 				}
 				else
 				{
 					//Failed
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_WithFormat(L"Failed to remove shutdown-privilege for session (%d):\"%s\", system will probably reboot now :(", 
+					ReportEventLogMsgERROR_WithFormat(L"Failed to remove shutdown-privilege for session (%d):\"%s\", system will probably reboot now :(",
 						dwActiveSession, buffActiveSessName);
 				}
 			}
 		}
 		else
-			EVENT_LOG_REPORTS::ReportEventLogMsgWARNING_WithFormat(L"No active session, ID=%d. Will allow reboot ...", dwActiveSession);
+			ReportEventLogMsgWARNING_WithFormat(L"No active session, ID=%d. Will allow reboot ...", dwActiveSession);
 	}
 	else
 	{
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_WithFormat(L"Bad input param: %d", nValue);
+		ReportEventLogMsgERROR_WithFormat(L"Bad input param: %d", nValue);
 	}
 
 	return nRes;
@@ -388,13 +387,13 @@ lbl_reboot_msg:
 
 
 
-UINT WINAPI TestCorrectDll(int)
+LPCTSTR WINAPI TestCorrectDll(void)
 {
 	//RETURN:
-	//		= Always returns
+	//		= Always returns the version of this DLL as a static string
 
-	//This is the exported function
-	#pragma comment(linker, "/EXPORT:" __FUNCTION__ "=" __FUNCDNAME__)
+	//This is the exported "C" function
+	EXPORTED_C_FUNCTION;
 
-	return SHELL_CHROME_API_ID_STAMP;
+	return MAIN_APP_VER;
 }

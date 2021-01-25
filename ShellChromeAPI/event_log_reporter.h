@@ -31,9 +31,26 @@
 
 
 
+#ifdef _DEBUG
+//Debug
+#define ReportEventLogMsgERROR_Spec_WithFormat(p, ...) CHECK_VARIADIC_P1(EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat_, p, __VA_ARGS__)
+#define ReportEventLogMsgERROR_Spec_WithFormat0(p) CHECK_VARIADIC_P1(EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat_, p, L"")
+#define ReportEventLogMsgInfo_WithFormat(...) CHECK_VARIADIC(EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat_, __VA_ARGS__)
+#define ReportEventLogMsgWARNING_WithFormat(...) CHECK_VARIADIC(EVENT_LOG_REPORTS::ReportEventLogMsgWARNING_WithFormat_, __VA_ARGS__)
+#define ReportEventLogMsgERROR_WithFormat(...) CHECK_VARIADIC(EVENT_LOG_REPORTS::ReportEventLogMsgERROR_WithFormat_, __VA_ARGS__)
+#else
+//Release
+#define ReportEventLogMsgERROR_Spec_WithFormat(p, ...) EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat_(p, __VA_ARGS__)
+#define ReportEventLogMsgERROR_Spec_WithFormat0(p, ...) EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat_(p, L"")
+#define ReportEventLogMsgInfo_WithFormat(...) EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat_(__VA_ARGS__)
+#define ReportEventLogMsgWARNING_WithFormat(...) EVENT_LOG_REPORTS::ReportEventLogMsgWARNING_WithFormat_(__VA_ARGS__)
+#define ReportEventLogMsgERROR_WithFormat(...) EVENT_LOG_REPORTS::ReportEventLogMsgERROR_WithFormat_(__VA_ARGS__)
+#endif
+
+
 struct EVENT_LOG_REPORTS{
 
-	static BOOL ReportEventLogMsgERROR_Spec_WithFormat(int nSpecErrCode, LPCTSTR pDescFormat = L"", ...)
+	static BOOL ReportEventLogMsgERROR_Spec_WithFormat_(int nSpecErrCode, LPCTSTR pDescFormat = L"", ...)
 	{
 		//Send error message to the event log
 		//'nSpecErrCode' = special error code -- see https://dennisbabkin.com/seqidgen
@@ -57,7 +74,7 @@ struct EVENT_LOG_REPORTS{
 		return bRes;
 	}
 
-	static BOOL ReportEventLogMsgInfo_WithFormat(LPCTSTR pDescFormat, ...)
+	static BOOL ReportEventLogMsgInfo_WithFormat_(LPCTSTR pDescFormat, ...)
 	{
 		//Send info message to the event log
 		//INFO: It will automatically add last OS Error code, time when logging was done, and this app version
@@ -80,7 +97,7 @@ struct EVENT_LOG_REPORTS{
 		return bRes;
 	}
 
-	static BOOL ReportEventLogMsgWARNING_WithFormat(LPCTSTR pDescFormat, ...)
+	static BOOL ReportEventLogMsgWARNING_WithFormat_(LPCTSTR pDescFormat, ...)
 	{
 		//Send warning message to the event log
 		//INFO: It will automatically add last OS Error code, time when logging was done, and this app version
@@ -103,7 +120,7 @@ struct EVENT_LOG_REPORTS{
 		return bRes;
 	}
 
-	static BOOL ReportEventLogMsgERROR_WithFormat(LPCTSTR pDescFormat, ...)
+	static BOOL ReportEventLogMsgERROR_WithFormat_(LPCTSTR pDescFormat, ...)
 	{
 		//Send error message to the event log
 		//INFO: It will automatically add last OS Error code, time when logging was done, and this app version
