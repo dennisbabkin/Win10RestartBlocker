@@ -1,7 +1,7 @@
 // Auto-geneated by SeqIDGen v.1.0.1
 //  https://dennisbabkin.com/seqidgen
 
-CURRENT_ID: 690
+CURRENT_ID: 720
 HOTKEY_ON: 1
 HK_VK: 73
 HK_MD: 3
