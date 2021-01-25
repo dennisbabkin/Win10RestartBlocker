@@ -36,6 +36,7 @@ int main()
 {
 //    std::cout << "Hello World!\n";
 
+	::GdiFlush();
 
 	if(AUX_FUNCS::AdjustPrivilege(SE_SHUTDOWN_NAME, TRUE, NULL))
 	{
