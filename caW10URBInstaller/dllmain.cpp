@@ -59,8 +59,8 @@ extern "C" UINT APIENTRY caFirstStage(MSIHANDLE hInstall)
 	//		= ERROR_NO_MORE_ITEMS	259			Skip remaining actions, not an error.
 	UINT nRes = ERROR_INSTALL_FAILURE;
 
-	//This is the exported function
-	#pragma comment(linker, "/EXPORT:" __FUNCTION__ "=" __FUNCDNAME__)
+	//This is the exported "C" function
+	EXPORTED_C_FUNCTION;
 
 	MSI_INFO msiInfo;
 	if (CCaMain::determineStage(hInstall, FALSE, msiInfo))
@@ -73,12 +73,12 @@ extern "C" UINT APIENTRY caFirstStage(MSIHANDLE hInstall)
 			if (!CCaMain::RegisterEventLogSource(strModPath.c_str()))
 			{
 				//Error
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(564, L"path: %s", strModPath.c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(564, L"path: %s", strModPath.c_str());
 			}
 		}
 
 		//Report an event
-		EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat(L"[566] %s", msiInfo.toDebugStr(FALSE).c_str());
+		ReportEventLogMsgInfo_WithFormat(L"[566] %s", msiInfo.toDebugStr(FALSE).c_str());
 
 		//Assume success
 		nRes = ERROR_SUCCESS;
@@ -94,7 +94,7 @@ extern "C" UINT APIENTRY caFirstStage(MSIHANDLE hInstall)
 
 	}
 	else
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(552, L"h=%X", hInstall);
+		ReportEventLogMsgERROR_Spec_WithFormat(552, L"h=%X", hInstall);
 
 	return nRes;
 }
@@ -113,14 +113,14 @@ extern "C" UINT APIENTRY caLastStage(MSIHANDLE hInstall)
 	//		= ERROR_NO_MORE_ITEMS	259			Skip remaining actions, not an error.
 	UINT nRes = ERROR_INSTALL_FAILURE;
 
-	//This is the exported function
-	#pragma comment(linker, "/EXPORT:" __FUNCTION__ "=" __FUNCDNAME__)
+	//This is the exported "C" function
+	EXPORTED_C_FUNCTION;
 
 	MSI_INFO msiInfo;
 	if (CCaMain::determineStage(hInstall, TRUE, msiInfo))
 	{
 		//Report an event
-		EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat(L"[567] %s", msiInfo.toDebugStr(FALSE).c_str());
+		ReportEventLogMsgInfo_WithFormat(L"[567] %s", msiInfo.toDebugStr(FALSE).c_str());
 
 		//Assume success
 		nRes = ERROR_SUCCESS;
@@ -138,7 +138,7 @@ extern "C" UINT APIENTRY caLastStage(MSIHANDLE hInstall)
 			if (!CCaMain::OnInstallation(msiInfo.stage == MS_INSTALL, msiInfo, strUsrErrDesc))
 			{
 				//Failed
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(568, L"stage=%d, UsrErrMsg: %s", msiInfo.stage, strUsrErrDesc.c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(568, L"stage=%d, UsrErrMsg: %s", msiInfo.stage, strUsrErrDesc.c_str());
 
 				//Return appropriate error code back to installer to abort installation
 				nRes = ERROR_INSTALL_FAILURE;
@@ -152,13 +152,12 @@ extern "C" UINT APIENTRY caLastStage(MSIHANDLE hInstall)
 				if (!CCaMain::Show_MSI_ErrorMessageBox(hInstall, strUsrErrDesc.c_str()))
 				{
 					//Failed
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(573, L"stage=%d, UsrErrMsg: %s", msiInfo.stage, strUsrErrDesc.c_str());
+					ReportEventLogMsgERROR_Spec_WithFormat(573, L"stage=%d, UsrErrMsg: %s", msiInfo.stage, strUsrErrDesc.c_str());
 				}
 			}
 		}
-		
-		
-		
+
+
 		
 		
 		if (msiInfo.stage == MS_UNINSTALL)
@@ -167,13 +166,13 @@ extern "C" UINT APIENTRY caLastStage(MSIHANDLE hInstall)
 			if (!CCaMain::DeregisterEventLogSource())
 			{
 				//Error
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(565);
+				ReportEventLogMsgERROR_Spec_WithFormat0(565);
 			}
 		}
 
 	}
 	else
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(547, L"h=%X", hInstall);
+		ReportEventLogMsgERROR_Spec_WithFormat(547, L"h=%X", hInstall);
 
 	return nRes;
 }

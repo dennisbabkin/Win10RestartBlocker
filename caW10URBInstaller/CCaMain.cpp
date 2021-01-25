@@ -18,6 +18,8 @@
 //    limitations under the License.
 //  
 //
+
+
 #include "pch.h"
 #include "CCaMain.h"
 
@@ -28,7 +30,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 BOOL CCaMain::getMSIProperty(MSIHANDLE hInstall, LPCTSTR pName, TCHAR* pBuffValue, int nchLenBuffValue)
 {
-	//Get the property
+	//Get MSI property
 	//'pName' = property name
 	//'pBuffValue' = buffer to be filled out with property value
 	//'nchLenBuffValue' = length of 'pBuffValue' in TCHARs
@@ -173,22 +175,23 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 				else
 				{
 					//Error
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(550, L"h=%X, bAfter=%d", hInstall, bAfter);
+					ReportEventLogMsgERROR_Spec_WithFormat(550, L"h=%X, bAfter=%d", hInstall, bAfter);
 					assert(NULL);
 				}
 
 
-				//Get product code (use PID of the MSI.exe process)
+				//Get product code (use PID of the MSI.exe process instead)
 				WCHAR buffProductCode[256];
 				buffProductCode[0] = 0;
 				hr = ::StringCchPrintf(buffProductCode, _countof(buffProductCode), L"x%X", ::GetCurrentProcessId());
 				if(SUCCEEDED(hr))
+				//if (getMSIProperty(hInstall, L"ProductName", buffProductCode, _countof(buffProductCode)))
 				{
 					if (!buffProductCode[0])
 					{
 						//Empty product code
 						nOSError = 2115;
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(554, L"h=%X, bAfter=%d, prop: %s", hInstall, bAfter, buffCmd);
+						ReportEventLogMsgERROR_Spec_WithFormat(554, L"h=%X, bAfter=%d, prop: %s", hInstall, bAfter, buffCmd);
 						assert(NULL);
 					}
 				}
@@ -197,7 +200,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 					//Failed to get product code
 					nOSError = (int)hr;
 					::SetLastError(nOSError);
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(553, L"h=%X, bAfter=%d, prop: %s", hInstall, bAfter, buffCmd);
+					ReportEventLogMsgERROR_Spec_WithFormat(553, L"h=%X, bAfter=%d, prop: %s", hInstall, bAfter, buffCmd);
 					assert(NULL);
 				}
 
@@ -210,7 +213,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 				if (FAILED(hr))
 				{
 					nOSError = (int)hr;
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(555, L"hr=0x%X, h=%X, bAfter=%d, ProdCode: %s, prop: %s", hr, hInstall, bAfter, buffProductCode, buffCmd);
+					ReportEventLogMsgERROR_Spec_WithFormat(555, L"hr=0x%X, h=%X, bAfter=%d, ProdCode: %s, prop: %s", hr, hInstall, bAfter, buffProductCode, buffCmd);
 					assert(NULL);
 				}
 
@@ -312,7 +315,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 							{
 								//Error
 								::SetLastError(dwR);
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(559, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
+								ReportEventLogMsgERROR_Spec_WithFormat(559, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
 								assert(NULL);
 								nOSError = dwR;
 							}
@@ -323,7 +326,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 						{
 							//Error
 							::SetLastError(dwR);
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(558, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
+							ReportEventLogMsgERROR_Spec_WithFormat(558, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
 							assert(NULL);
 							nOSError = dwR;
 						}
@@ -332,7 +335,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 					{
 						//Error
 						::SetLastError(dwR);
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(556, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
+						ReportEventLogMsgERROR_Spec_WithFormat(556, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
 						assert(NULL);
 						nOSError = 8400;
 					}
@@ -347,7 +350,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 						{
 							//Error
 							::SetLastError(dwR);
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(560, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
+							ReportEventLogMsgERROR_Spec_WithFormat(560, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
 							assert(NULL);
 							nOSError = dwR;
 						}
@@ -365,7 +368,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 					{
 						//Error
 						::SetLastError(dwR);
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(561, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
+						ReportEventLogMsgERROR_Spec_WithFormat(561, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
 						assert(NULL);
 						nOSError = dwR;
 					}
@@ -409,7 +412,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 							{
 								//Error
 								::SetLastError(dwR);
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(563, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
+								ReportEventLogMsgERROR_Spec_WithFormat(563, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
 								assert(NULL);
 								nOSError = dwR;
 							}
@@ -420,7 +423,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 						{
 							//Error
 							::SetLastError(dwR);
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(562, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
+							ReportEventLogMsgERROR_Spec_WithFormat(562, L"hv=0x%p, key=%s, h=%X, bAfter=%d, prop: %s", hRegKey, buffRegKey, hInstall, bAfter, buffCmd);
 							assert(NULL);
 							nOSError = dwR;
 						}
@@ -434,7 +437,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 				else
 				{
 					//Failed to determine the stage
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(551, L"h=%X, bAfter=%d, prop: %s", hInstall, bAfter, buffCmd);
+					ReportEventLogMsgERROR_Spec_WithFormat(551, L"h=%X, bAfter=%d, prop: %s", hInstall, bAfter, buffCmd);
 					assert(NULL);
 					nOSError = 4985;
 				}
@@ -442,7 +445,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 			else
 			{
 				//Error
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(557, L"h=%X, bAfter=%d, prop: %s", hInstall, bAfter, buffCmd);
+				ReportEventLogMsgERROR_Spec_WithFormat(557, L"h=%X, bAfter=%d, prop: %s", hInstall, bAfter, buffCmd);
 				assert(NULL);
 				nOSError = ERROR_INVALID_ORDINAL;
 			}
@@ -450,7 +453,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 		else
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(549, L"cnt=%Iu, h=%X, bAfter=%d, prop: %s", szcntParts, hInstall, bAfter, buffCmd);
+			ReportEventLogMsgERROR_Spec_WithFormat(549, L"cnt=%Iu, h=%X, bAfter=%d, prop: %s", szcntParts, hInstall, bAfter, buffCmd);
 			assert(NULL);
 			nOSError = 1782;
 		}
@@ -459,7 +462,7 @@ BOOL CCaMain::determineStage(MSIHANDLE hInstall, BOOL bAfter, MSI_INFO& msiInfo)
 	{
 		//Didn't get the custom action property
 		nOSError = ::GetLastError();
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(548, L"h=%X, bAfter=%d", hInstall, bAfter);
+		ReportEventLogMsgERROR_Spec_WithFormat(548, L"h=%X, bAfter=%d", hInstall, bAfter);
 		assert(NULL);
 	}
 
@@ -577,10 +580,10 @@ int CCaMain::msiMessageBox(MSIHANDLE hInstall, LPCTSTR pStrMsg, DWORD dwMSIType,
 			nRet = MsiProcessMessage(hInstall, INSTALLMESSAGE(dwMSIType | dwMsgType), hRecord);
 		}
 		else
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(571, L"h=0x%x, hR=0x%x, msg: %s", hInstall, hRecord, pStrMsg ? pStrMsg : L"<null>");
+			ReportEventLogMsgERROR_Spec_WithFormat(571, L"h=0x%x, hR=0x%x, msg: %s", hInstall, hRecord, pStrMsg ? pStrMsg : L"<null>");
 	}
 	else
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(570, L"h=0x%x, msg: %s", hInstall, pStrMsg ? pStrMsg : L"<null>");
+		ReportEventLogMsgERROR_Spec_WithFormat(570, L"h=0x%x, msg: %s", hInstall, pStrMsg ? pStrMsg : L"<null>");
 
 	return nRet;
 }
@@ -791,7 +794,7 @@ RES_YES_NO_ERR CCaMain::DoesOriginalShellChromeAPIExist(LPCTSTR pStrSystem32Fldr
 				else
 				{
 					//Some other DLL is there
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(577, L"CompanyName=\"%s\", Path=\"%s\"", strName.c_str(), buffDll);
+					ReportEventLogMsgERROR_Spec_WithFormat(577, L"CompanyName=\"%s\", Path=\"%s\"", strName.c_str(), buffDll);
 					nOSError = 5010;
 				}
 			}
@@ -808,7 +811,7 @@ RES_YES_NO_ERR CCaMain::DoesOriginalShellChromeAPIExist(LPCTSTR pStrSystem32Fldr
 				else
 				{
 					//Some other error
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(576, L"%s", buffDll);
+					ReportEventLogMsgERROR_Spec_WithFormat(576, L"%s", buffDll);
 				}
 			}
 		}
@@ -834,7 +837,7 @@ BOOL CCaMain::DeployFileFromResource(LPCTSTR pDestFilePath, UINT nResID, LPCTSTR
 	BOOL bRes = FALSE;
 	int nOSError = NO_ERROR;
 
-	HMODULE hModule = (HMODULE)&__ImageBase;	// ::GetModuleHandle(NULL);
+	HMODULE hModule = (HMODULE)&__ImageBase;
 	HRSRC hRes = ::FindResource(hModule, MAKEINTRESOURCE(nResID), pResType);
 	if (hRes)
 	{
@@ -916,7 +919,7 @@ std::wstring CCaMain::GetSystem32FolderPath(BOOL b64BitOS)
 #else
 	//64-bit OS - can't use this build!
 	buff[0] = 0;
-	EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(575);
+	ReportEventLogMsgERROR_Spec_WithFormat0(575);
 	assert(NULL);
 #endif
 
@@ -963,7 +966,7 @@ int CCaMain::CloseMainGUIApps(DWORD dwmsTimeout)
 				else
 				{
 					//Error
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(617);
+					ReportEventLogMsgERROR_Spec_WithFormat0(617);
 
 					bNeed2Wait = FALSE;
 					nRes = -1;
@@ -982,7 +985,7 @@ int CCaMain::CloseMainGUIApps(DWORD dwmsTimeout)
 			{
 				//Timed out
 				::SetLastError(ERROR_TIMEOUT);
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(618, L"to=%u, t=%u", dwmsTimeout, dwmsElapsed);
+				ReportEventLogMsgERROR_Spec_WithFormat(618, L"to=%u, t=%u", dwmsTimeout, dwmsElapsed);
 
 				nRes = -2;
 				break;
@@ -991,7 +994,7 @@ int CCaMain::CloseMainGUIApps(DWORD dwmsTimeout)
 		else
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(616);
+			ReportEventLogMsgERROR_Spec_WithFormat0(616);
 
 			nRes = -1;
 			break;
@@ -1038,7 +1041,7 @@ BOOL CCaMain::OnInstallation(BOOL bFirstInstall, MSI_INFO& msiInfo, std::wstring
 			if (nRzCMGA < 0)
 			{
 				//Error
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(622, L"r=%d", nRzCMGA);
+				ReportEventLogMsgERROR_Spec_WithFormat(622, L"r=%d", nRzCMGA);
 			}
 		}
 
@@ -1048,14 +1051,14 @@ BOOL CCaMain::OnInstallation(BOOL bFirstInstall, MSI_INFO& msiInfo, std::wstring
 		if (res64bit == RYNE_ERROR)
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(574);
+			ReportEventLogMsgERROR_Spec_WithFormat0(574);
 		}
 
 
 		if (bFirstInstall)
 		{
 			//Set which OS we're installing on
-			EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat(L"[684] Installing on %s OS", 
+			ReportEventLogMsgInfo_WithFormat(L"[684] Installing on %s OS", 
 				res64bit != RYNE_ERROR ? (res64bit == RYNE_YES ? L"64-bit" : L"32-bit") : L"unknown-bitness"
 			);
 		}
@@ -1100,7 +1103,7 @@ BOOL CCaMain::OnInstallation(BOOL bFirstInstall, MSI_INFO& msiInfo, std::wstring
 			{
 				//Failed
 				nSpecErr = 585;
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(584, L"path: %s >> %s", strFile_GUIapp.c_str(), msiInfo.toDebugStr().c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(584, L"path: %s >> %s", strFile_GUIapp.c_str(), msiInfo.toDebugStr().c_str());
 
 lbl_comp_err:
 				//Set error message to show to the user
@@ -1120,12 +1123,12 @@ lbl_comp_err:
 			}
 
 
-			//Install VULN_SHELL_DLL_FILE_NAME module into the system folder
+			//Install the VULN_SHELL_DLL_FILE_NAME module into the system folder
 			if (!CCaMain::DeployFileFromResource(strFile_SysDll.c_str(), b64bit ? IDR_RT_RCD_VULN_SHELL_DLL_x64 : IDR_RT_RCD_VULN_SHELL_DLL_x86))
 			{
 				//Failed
 				nSpecErr = 587;
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(586, L"path: %s >> %s", strFile_SysDll.c_str(), msiInfo.toDebugStr().c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(586, L"path: %s >> %s", strFile_SysDll.c_str(), msiInfo.toDebugStr().c_str());
 				goto lbl_comp_err;
 			}
 
@@ -1139,7 +1142,7 @@ lbl_comp_err:
 				//Failed
 				nSpecErr = 589;
 				::SetLastError(dwR);
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(588, L"b=%d >> %s", b64bit, msiInfo.toDebugStr().c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(588, L"b=%d >> %s", b64bit, msiInfo.toDebugStr().c_str());
 				goto lbl_comp_err;
 			}
 
@@ -1149,7 +1152,7 @@ lbl_comp_err:
 			{
 				if (!msiInfo.strMSIFolder.empty())
 				{
-					//Get registry settings from a special registry configuration file file
+					//Get registry settings from a special registry configuration file
 					std::wstring strConfigFilePath = AUX_FUNCS::MakeFolderPathEndWithSlash(msiInfo.strMSIFolder, TRUE) + REG_CONFILE_FILE_NAME;
 
 					//Does such file exist
@@ -1180,7 +1183,7 @@ lbl_comp_err:
 								else
 								{
 									//Error
-									EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(679, L"ver=\"%s\"", pVer->strVal.c_str());
+									ReportEventLogMsgERROR_Spec_WithFormat(679, L"ver=\"%s\"", pVer->strVal.c_str());
 
 									AUX_FUNCS::Format(strOutUserErrMsg, L"[680] Failed to parse version in provided configuration file:\n%s", strConfigFilePath.c_str());
 
@@ -1233,7 +1236,7 @@ lbl_comp_err:
 											else
 											{
 												//Bad type
-												EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(599, L"t=%d >> %s", pCRV->type, msiInfo.toDebugStr().c_str());
+												ReportEventLogMsgERROR_Spec_WithFormat(599, L"t=%d >> %s", pCRV->type, msiInfo.toDebugStr().c_str());
 												continue;
 											}
 
@@ -1259,7 +1262,7 @@ lbl_comp_err:
 											{
 												//Failed to set
 												::SetLastError(dwR);
-												EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(600, L"%s, type=%d, dwType=%d, sz=%d >> %s",
+												ReportEventLogMsgERROR_Spec_WithFormat(600, L"%s, type=%d, dwType=%d, sz=%d >> %s",
 													pCRV->strName.c_str(),
 													pCRV->type,
 													dwType,
@@ -1280,22 +1283,33 @@ lbl_comp_err:
 
 
 								//Put message about it into the event log
-								BOOL(*pfnReportEventLog)(LPCTSTR pDescFormat, ...);
-								pfnReportEventLog = bVersionOK ? EVENT_LOG_REPORTS::ReportEventLogMsgInfo_WithFormat : EVENT_LOG_REPORTS::ReportEventLogMsgWARNING_WithFormat;
-
-								pfnReportEventLog(L"[674] Applied %Id system registry setting(s) from config file%s:\n%s\n\n%s%s"
-									,
-									nCntApplied,
-									bVersionOK ? L"" : AUX_FUNCS::EasyFormat(L", from newer version file (v.%s)", pVer->strVal.c_str()).c_str(),
-									strConfigFilePath.c_str(),
-									strBuff.c_str(),
-									nCntApplied <= MAX_ALLOWED_EVENT_VWR_ENTRIES ? L"" : L"**Abridged**"
-								);
+								if (bVersionOK)
+								{
+									ReportEventLogMsgInfo_WithFormat(L"[674] Applied %Id system registry setting(s) from config file%s:\n%s\n\n%s%s"
+										,
+										nCntApplied,
+										bVersionOK ? L"" : AUX_FUNCS::EasyFormat(L", from newer version file (v.%s)", pVer->strVal.c_str()).c_str(),
+										strConfigFilePath.c_str(),
+										strBuff.c_str(),
+										nCntApplied <= MAX_ALLOWED_EVENT_VWR_ENTRIES ? L"" : L"**Abridged**"
+									);
+								}
+								else
+								{
+									ReportEventLogMsgWARNING_WithFormat(L"[692] Applied %Id system registry setting(s) from config file%s:\n%s\n\n%s%s"
+										,
+										nCntApplied,
+										bVersionOK ? L"" : AUX_FUNCS::EasyFormat(L", from newer version file (v.%s)", pVer->strVal.c_str()).c_str(),
+										strConfigFilePath.c_str(),
+										strBuff.c_str(),
+										nCntApplied <= MAX_ALLOWED_EVENT_VWR_ENTRIES ? L"" : L"**Abridged**"
+									);
+								}
 							}
 							else
 							{
 								//Bad version in config file
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(677, L"pV=0x%p, type=%d", pVer, pVer ? pVer->type : -1);
+								ReportEventLogMsgERROR_Spec_WithFormat(677, L"pV=0x%p, type=%d", pVer, pVer ? pVer->type : -1);
 
 								AUX_FUNCS::Format(strOutUserErrMsg, L"[678] Unknown or misconfigured version of provided configuration file:\n%s", strConfigFilePath.c_str());
 
@@ -1307,7 +1321,7 @@ lbl_comp_err:
 						{
 							//Failed to read config file
 							dwR = ::GetLastError();
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(597, L"path=\"%s\" >> %s", strConfigFilePath.c_str(), msiInfo.toDebugStr().c_str());
+							ReportEventLogMsgERROR_Spec_WithFormat(597, L"path=\"%s\" >> %s", strConfigFilePath.c_str(), msiInfo.toDebugStr().c_str());
 
 							AUX_FUNCS::Format(strOutUserErrMsg, L"[598] Failed to read provided configuration file:\n"
 								L"%s\n\n"
@@ -1326,7 +1340,7 @@ lbl_comp_err:
 				else
 				{
 					//Error
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(596, L"%s", msiInfo.toDebugStr().c_str());
+					ReportEventLogMsgERROR_Spec_WithFormat(596, L"%s", msiInfo.toDebugStr().c_str());
 				}
 			}
 
@@ -1336,7 +1350,7 @@ lbl_comp_err:
 			{
 				//Failed
 				::SetLastError(dwR);
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(590, L"%s >> %s", strFile_GUIapp.c_str(), msiInfo.toDebugStr().c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(590, L"%s >> %s", strFile_GUIapp.c_str(), msiInfo.toDebugStr().c_str());
 			}
 
 			//Set version
@@ -1344,7 +1358,7 @@ lbl_comp_err:
 			{
 				//Failed
 				::SetLastError(dwR);
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(591, L"%s", msiInfo.toDebugStr().c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(591, L"%s", msiInfo.toDebugStr().c_str());
 			}
 
 
@@ -1359,7 +1373,7 @@ lbl_comp_err:
 				if (!AUX_FUNCS::MakeRegKeyShared(hKeyShared))
 				{
 					//Failed to set sharing on the key
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(632, L"%s", msiInfo.toDebugStr().c_str());
+					ReportEventLogMsgERROR_Spec_WithFormat(632, L"%s", msiInfo.toDebugStr().c_str());
 				}
 
 				//Close key
@@ -1370,7 +1384,7 @@ lbl_comp_err:
 			{
 				//Failed
 				::SetLastError(dwR);
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(631, L"%s", msiInfo.toDebugStr().c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(631, L"%s", msiInfo.toDebugStr().c_str());
 			}
 
 
@@ -1401,8 +1415,8 @@ lbl_cleanup:
 		}
 		else if (resDll == RYNE_YES)
 		{
-			//Origina VULN_SHELL_DLL_FILE_NAME module is there!
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(580, L"path: %s >> %s", strSysFldrs.c_str(), msiInfo.toDebugStr().c_str());
+			//The original VULN_SHELL_DLL_FILE_NAME module was there!
+			ReportEventLogMsgERROR_Spec_WithFormat(580, L"path: %s >> %s", strSysFldrs.c_str(), msiInfo.toDebugStr().c_str());
 
 			strOutUserErrMsg = L"[581] The system component has already been patched. Installation on this computer is not possible.";
 			bResult = FALSE;
@@ -1410,7 +1424,7 @@ lbl_cleanup:
 		else
 		{
 			//Error determening type of the VULN_SHELL_DLL_FILE_NAME module
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(578, L"r=%d, path: %s >> %s", resDll, strSysFldrs.c_str(), msiInfo.toDebugStr().c_str());
+			ReportEventLogMsgERROR_Spec_WithFormat(578, L"r=%d, path: %s >> %s", resDll, strSysFldrs.c_str(), msiInfo.toDebugStr().c_str());
 
 			strOutUserErrMsg = L"[579] Failed to determine the type of the system component. Contact support at " SUPPORT_EMAIL;
 			bResult = FALSE;
@@ -1419,7 +1433,7 @@ lbl_cleanup:
 	else
 	{
 		//No installation folder
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(582, L"%s", msiInfo.toDebugStr().c_str());
+		ReportEventLogMsgERROR_Spec_WithFormat(582, L"%s", msiInfo.toDebugStr().c_str());
 
 		strOutUserErrMsg = L"[583] Incorrect installation parameter. Contact support at " SUPPORT_EMAIL;
 		bResult = FALSE;
@@ -1451,7 +1465,7 @@ void CCaMain::OnUninstallation(BOOL bUpgrade, MSI_INFO& msiInfo)
 	if (nRzCMGA < 0)
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(623, L"r=%d", nRzCMGA);
+		ReportEventLogMsgERROR_Spec_WithFormat(623, L"r=%d", nRzCMGA);
 	}
 
 
@@ -1460,7 +1474,7 @@ void CCaMain::OnUninstallation(BOOL bUpgrade, MSI_INFO& msiInfo)
 	if (res64bit == RYNE_ERROR)
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(592);
+		ReportEventLogMsgERROR_Spec_WithFormat0(592);
 	}
 
 
@@ -1482,23 +1496,47 @@ void CCaMain::OnUninstallation(BOOL bUpgrade, MSI_INFO& msiInfo)
 
 
 
-	//Delete VULN_SHELL_DLL_FILE_NAME module
-	if (!AUX_FUNCS::DeleteFileSmart(strFile_SysDll.c_str()))
+	//See that the System32 folder doesn't contain the original patch module VULN_SHELL_DLL_FILE_NAME
+	//INFO: In case Microsoft has already patched it!
+	//		= RYNE_YES if that DLL already exists and we shouldn't mess with it
+	//		= RYNE_NO if that DLL does not exist, or if it exists but it's not the original copy -- in that case GetLastError() will be set to one of:
+	//					1760 = if it's copy of that DLL
+	//		= RYNE_ERROR if error - check GetLastError() for details
+	RES_YES_NO_ERR resDll = DoesOriginalShellChromeAPIExist(strSysFldrs.c_str());
+
+	if (resDll != RYNE_YES)
 	{
-		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(594, L"path=\"%s\" >> %s", strFile_SysDll.c_str(), msiInfo.toDebugStr().c_str());
+		//See that we haven't failed before
+		if (resDll != RYNE_NO)
+		{
+			//Error
+			ReportEventLogMsgERROR_Spec_WithFormat(713, L"r=%d, path=\"%s\" >> %s", resDll, strFile_SysDll.c_str(), msiInfo.toDebugStr().c_str());
+		}
+
+		//Delete the VULN_SHELL_DLL_FILE_NAME module
+		if (!AUX_FUNCS::DeleteFileSmart(strFile_SysDll.c_str()))
+		{
+			//Error
+			ReportEventLogMsgERROR_Spec_WithFormat(594, L"path=\"%s\" >> %s", strFile_SysDll.c_str(), msiInfo.toDebugStr().c_str());
+		}
 	}
+	else
+	{
+		//Microsoft must have patched it -- we can't delete this file!
+		ReportEventLogMsgWARNING_WithFormat(L"[712] Cannot remove original component: path=\"%s\" >> %s", strFile_SysDll.c_str(), msiInfo.toDebugStr().c_str());
+	}
+
 
 	if (!strInstallFldr.empty())
 	{
 		std::wstring strFile_GUIapp;
 		AUX_FUNCS::Format(strFile_GUIapp, L"%s%s", strInstallFldr.c_str(), MAIN_UI_PROC_FILE_NAME);
 
-		//Delete Settings UI file
+		//Delete the Settings UI app image file
 		if (!AUX_FUNCS::DeleteFileSmart(strFile_GUIapp.c_str()))
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(595, L"path=\"%s\" >> %s", strFile_GUIapp.c_str(), msiInfo.toDebugStr().c_str());
+			ReportEventLogMsgERROR_Spec_WithFormat(595, L"path=\"%s\" >> %s", strFile_GUIapp.c_str(), msiInfo.toDebugStr().c_str());
 		}
 
 	}
@@ -1539,7 +1577,7 @@ void CCaMain::OnUninstallation(BOOL bUpgrade, MSI_INFO& msiInfo)
 			if (!bOk)
 			{
 				::SetLastError(dwR);
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(626, L"key=\"%s\", %s", delRegKeys[d].pStrKeyName, msiInfo.toDebugStr().c_str());
+				ReportEventLogMsgERROR_Spec_WithFormat(626, L"key=\"%s\", %s", delRegKeys[d].pStrKeyName, msiInfo.toDebugStr().c_str());
 			}
 		}
 
