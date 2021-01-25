@@ -27,14 +27,15 @@
   <!-- Current MSI build options -->
 
   <!-- DO NOT use the 4th digit! -->
-  <?define VersionThis = "1.1.0" ?>
+  <?define VersionThis = "1.2.0" ?>
 
   <!-- Previous versions of the this installer:
        INFO: Must be changed for every version!
         {F21A30EF-4E02-4475-B13E-BAB909080263} = v.1.0.0
         {E32C6C91-0A69-4848-A7A5-C8D4F377B949} = v.1.1.0
+        {DDBE4264-C0B5-4E91-9708-5A17A552BFF8} = v.1.2.0
   -->
-  <?define ProductCode = "{E32C6C91-0A69-4848-A7A5-C8D4F377B949}" ?>
+  <?define ProductCode = "{DDBE4264-C0B5-4E91-9708-5A17A552BFF8}" ?>
 
 
   <!-- 
