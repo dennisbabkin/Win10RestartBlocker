@@ -46,11 +46,45 @@ CMainWnd::CMainWnd(HINSTANCE hInst)
 	, _hThreadEventMon(NULL)
 	, _hEventStop(NULL)
 	, _hAccelMain(NULL)
+	, g_CmdSvPowerOp(PWR_OP_None)
+	, _ghBmpUAC(NULL)
 {
+	//Constructor for the main window
+
 #ifdef _DEBUG
+
+	//Debugging-at-play code should be placed here!!!
+	//
+	//
+
+
 
 
 #endif
+
+
+
+
+	//Enable newer version of DPI awareness when all windows DPI scaling can change on the fly
+	//(or if a window's dragged into another monitor with a different DPI scaling)
+	BOOL(WINAPI *pfnSetProcessDpiAwarenessContext)(DPI_AWARENESS_CONTEXT value);
+	(FARPROC&)pfnSetProcessDpiAwarenessContext = ::GetProcAddress(::GetModuleHandle(L"user32.dll"), "SetProcessDpiAwarenessContext");
+	if (pfnSetProcessDpiAwarenessContext)
+	{
+		//Newer API that may not be available on older versions of the OS
+		if (!pfnSetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
+		{
+			//Failed
+			ReportEventLogMsgERROR_Spec_WithFormat0(710);
+			ASSERT(NULL);
+		}
+	}
+	else
+		ASSERT(NULL);
+
+
+	//See if we need elevation to access restricted objects
+	gReqAdmin = IsElevationRequiredToSaveChanges();
 
 }
 
@@ -65,6 +99,10 @@ CMainWnd::~CMainWnd()
 	//Thread must be closed by now!
 	ASSERT(!_hThreadEventMon);
 	ASSERT(!_hEventStop);
+
+	//Remove icon
+	VERIFY(::DeleteObject(_ghBmpUAC));
+	_ghBmpUAC = NULL;
 }
 
 BOOL CMainWnd::CreateMainWnd(BOOL bPreventAnotherInstance)
@@ -86,7 +124,7 @@ BOOL CMainWnd::CreateMainWnd(BOOL bPreventAnotherInstance)
 			//Register our special class
 			if(ChangeClassNameForDlgWnd(CLASS_NAME_SETTINGS_MAIN_WND))
 			{
-				//Create main window
+				//Create main window (to support accelerators)
 				BOOL bR = DialogBoxParamSpecial(_ghInstance, MAKEINTRESOURCE(IDD_MAIN_WND), NULL, _iniDlgProc, (LPARAM)this, &this->_hAccelMain);
 				if(bR)
 				{
@@ -98,7 +136,7 @@ BOOL CMainWnd::CreateMainWnd(BOOL bPreventAnotherInstance)
 					//Failed to show
 					dwExitCode = AUX_FUNCS::GetLastErrorNotNULL(1449);
 
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(500, L"nR=%d", bR);
+					ReportEventLogMsgERROR_Spec_WithFormat(500, L"nR=%d", bR);
 					ASSERT(NULL);
 				}
 			}
@@ -106,7 +144,7 @@ BOOL CMainWnd::CreateMainWnd(BOOL bPreventAnotherInstance)
 			{
 				//Failed
 				dwExitCode = AUX_FUNCS::GetLastErrorNotNULL(8371);
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(507);
+				ReportEventLogMsgERROR_Spec_WithFormat0(507);
 				ASSERT(NULL);
 			}
 		}
@@ -118,7 +156,7 @@ BOOL CMainWnd::CreateMainWnd(BOOL bPreventAnotherInstance)
 			_hEventQuitNow = NULL;
 
 
-			//Find our windows by its class
+			//Find that other window by its class
 			HWND hWnd = ::FindWindow(CLASS_NAME_SETTINGS_MAIN_WND, NULL);
 			if(hWnd)
 			{
@@ -142,6 +180,7 @@ BOOL CMainWnd::CreateMainWnd(BOOL bPreventAnotherInstance)
 			else
 			{
 				//Couldn't find our window -- hah?
+				ReportEventLogMsgERROR_Spec_WithFormat0(714);
 				ASSERT(NULL);
 				::MessageBeep(MB_ICONERROR);
 			}
@@ -154,7 +193,7 @@ BOOL CMainWnd::CreateMainWnd(BOOL bPreventAnotherInstance)
 	{
 		//Can't call it repeatedly
 		dwExitCode = 3140;
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(508);
+		ReportEventLogMsgERROR_Spec_WithFormat0(508);
 		ASSERT(NULL);
 	}
 
@@ -228,7 +267,8 @@ BOOL CMainWnd::DialogBoxParamSpecial(HINSTANCE hInstance, LPCWSTR lpTemplateName
 			while (::PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 			{
 				//Hack to ensure processing of EndDialog() calls
-				if (msg.message == WM_NULL && msg.hwnd == hDlg)
+				if (msg.message == WM_NULL &&
+					msg.hwnd == hDlg)
 				{
 					//Normal exit
 					bResult = TRUE;
@@ -322,6 +362,7 @@ INT_PTR CMainWnd::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 			OnPaint(hdc, ps);
 			EndPaint(hDlg, &ps);
 
+			//Small "Hack": Wait until the main window is shown before posting a Post-InitDialog message to self ...
 			if(!_gbPostInitDlgDone)
 			{
 				//Do this only once
@@ -330,7 +371,7 @@ INT_PTR CMainWnd::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 				//Post a message to self
 				if(!::PostMessage(hDlg, MSG_ID_POST_INIT_DIALOG, 0, 0))
 				{
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(530, L"h=%p", hDlg);
+					ReportEventLogMsgERROR_Spec_WithFormat(530, L"h=%p", hDlg);
 					ASSERT(NULL);
 				}
 			}
@@ -339,6 +380,7 @@ INT_PTR CMainWnd::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		case WM_CTLCOLORSTATIC:
 		{
+			//Control colors
 			HBRUSH hBrush = (HBRUSH)::DefWindowProc(hDlg, uMsg, wParam, lParam);
 			OnCtrlColor((HDC)wParam, (HWND)lParam, ::GetDlgCtrlID((HWND)lParam), hBrush);
 
@@ -347,7 +389,7 @@ INT_PTR CMainWnd::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		case WM_COMMAND:
 		{
-			//Distinguish where command is coming from
+			//Distinguish where this command is coming from
 			WORD wCmdId = LOWORD(wParam);
 			WORD wType = HIWORD(wParam);
 
@@ -372,6 +414,7 @@ INT_PTR CMainWnd::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		case MSG_ID_POST_INIT_DIALOG:
 		{
+			//Message that should be posted only once!
 			OnPostInitDialog();
 		}
 		break;
@@ -382,6 +425,16 @@ INT_PTR CMainWnd::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 			OnDropFile((std::wstring*)lParam);
 		}
 		break;
+
+		case WM_DPICHANGED:
+		{
+			//DPI setting has changed for this window
+
+			//Reload resources
+			ReloadResources();
+
+			return 0;
+		}
 	}
 
 	return FALSE;
@@ -402,34 +455,6 @@ BOOL CMainWnd::OnInitDialog(HWND hWndDefaultFocus)
 	::SetWindowText(hDlg, MAIN_APP_NAME);
 
 
-	//Load icons (as shared so that we don't have to delete them)
-	HANDLE hIconLg = ::LoadImage(this->_ghInstance, MAKEINTRESOURCE(IDI_MAIN_ICON), IMAGE_ICON, ::GetSystemMetrics(SM_CXICON), ::GetSystemMetrics(SM_CYICON), LR_SHARED);
-	ASSERT(hIconLg);
-	HANDLE hIconSm = ::LoadImage(this->_ghInstance, MAKEINTRESOURCE(IDI_MAIN_ICON), IMAGE_ICON, ::GetSystemMetrics(SM_CXSMICON), ::GetSystemMetrics(SM_CYSMICON), LR_SHARED);
-	ASSERT(hIconSm);
-
-	//Set window icons
-	::SendMessage(hDlg, WM_SETICON, ICON_BIG, (LPARAM)hIconLg);
-	::SendMessage(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIconSm);
-
-
-	//Get current DPI
-	double fDpiX;
-	VERIFY(AUX_FUNCS::GetDPI(hDlg, &fDpiX));
-
-	//Load logo icon
-	ASSERT(!_hIconLogo);
-	_gszMainIconLogo.cx= (int)(MAIN_LOGO_ICON_WIDTH * fDpiX);
-	_gszMainIconLogo.cy = (int)(MAIN_LOGO_ICON_HEIGHT * fDpiX);
-	HRESULT hr = ::LoadIconWithScaleDown(this->_ghInstance, MAKEINTRESOURCE(IDI_MAIN_ICON), _gszMainIconLogo.cx, _gszMainIconLogo.cy, &_hIconLogo);
-	ASSERT(_hIconLogo);
-	if(hr != S_OK)
-	{
-		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(509, L"dpi=%f, w=%d, h=%d", fDpiX, _gszMainIconLogo.cx, _gszMainIconLogo.cy);
-		ASSERT(NULL);
-	}
-
 	
 	//Allow this window to be sent to the foreground
 	::AllowSetForegroundWindow(ASFW_ANY);
@@ -447,7 +472,7 @@ BOOL CMainWnd::OnInitDialog(HWND hWndDefaultFocus)
 	//	if (!::ChangeWindowMessageFilter(nMsgsAllow[i], MSGFLT_ADD))
 	//	{
 	//		//Failed
-	//		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(675, L"m=%u", nMsgsAllow[i]);
+	//		ReportEventLogMsgERROR_Spec_WithFormat(675, L"m=%u", nMsgsAllow[i]);
 	//		ASSERT(NULL);
 	//	}
 	//}
@@ -458,7 +483,7 @@ BOOL CMainWnd::OnInitDialog(HWND hWndDefaultFocus)
 	if (!RegisterForDragAndDrop(&dndr))
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(672);
+		ReportEventLogMsgERROR_Spec_WithFormat0(672);
 		ASSERT(NULL);
 	}
 
@@ -469,15 +494,19 @@ BOOL CMainWnd::OnInitDialog(HWND hWndDefaultFocus)
 	if (!_hAccelMain)
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(664);
+		ReportEventLogMsgERROR_Spec_WithFormat0(664);
 		ASSERT(NULL);
 	}
+
+
+	//Load resources
+	ReloadResources();
 
 
 	//Place our window in the middle of the screen
 	if(!PositionThisWindowInCenterOfMonitor(_ghCmdMonitor))
 	{
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(505, L"h=%p", _ghCmdMonitor);
+		ReportEventLogMsgERROR_Spec_WithFormat(505, L"h=%p", _ghCmdMonitor);
 		ASSERT(NULL);
 	}
 
@@ -498,14 +527,12 @@ BOOL CMainWnd::OnInitDialog(HWND hWndDefaultFocus)
 	SetCtrls(g_settings);
 
 
-	//See if we can save changes
-	gReqAdmin = IsElevationRequiredToSaveChanges();
 	if(gReqAdmin != RYNE_NO)
 	{
 		if(gReqAdmin != RYNE_YES)
 		{
 			//Failed to determine
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(512);
+			ReportEventLogMsgERROR_Spec_WithFormat0(512);
 			ASSERT(NULL);
 		}
 
@@ -515,13 +542,13 @@ BOOL CMainWnd::OnInitDialog(HWND hWndDefaultFocus)
 	}
 
 
-	//Create stop event
+	//Create a stop event
 	ASSERT(!_hEventStop);
 	_hEventStop = ::CreateEvent(NULL, TRUE, FALSE, NULL);
 	if (!_hEventStop)
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(608);
+		ReportEventLogMsgERROR_Spec_WithFormat0(608);
 		ASSERT(NULL);
 	}
 
@@ -531,7 +558,7 @@ BOOL CMainWnd::OnInitDialog(HWND hWndDefaultFocus)
 	if (!_hThreadEventMon)
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(606);
+		ReportEventLogMsgERROR_Spec_WithFormat0(606);
 		ASSERT(NULL);
 	}
 
@@ -543,9 +570,20 @@ BOOL CMainWnd::OnInitDialog(HWND hWndDefaultFocus)
 void CMainWnd::OnPostInitDialog()
 {
 	//It is called once after main window has initialized & been fully shown
-	//INFO: It's a good place to show some initial UI ...
+	//INFO: It's a good place to show some initial UI message boxes ...
 
-	//Do we have command line run?
+	//Do we need to perform a power operation from a command line?
+	if (g_CmdSvPowerOp != PWR_OP_None)
+	{
+		//Perform power operation
+		if(!performPowerOp(g_CmdSvPowerOp))
+		{
+			//Failed
+			ReportEventLogMsgERROR_Spec_WithFormat(708, L"op=%d", g_CmdSvPowerOp);
+		}
+	}
+
+	//Do we have a command line run?
 	if(g_CmdSvData.saveOp != SV_O_None)
 	{
 		//Save the data passed in the command line
@@ -556,11 +594,11 @@ void CMainWnd::OnPostInitDialog()
 			//Do we need to close?
 			if(g_CmdSvData.saveOp == SV_O_OK)
 			{
-				//Post message to close
+				//Post message to close self
 				if(!::PostMessage(hDlg, WM_CLOSE, 0, 0))
 				{
 					//Failed
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(532, L"h=%p", hDlg);
+					ReportEventLogMsgERROR_Spec_WithFormat(532, L"h=%p", hDlg);
 					ASSERT(NULL);
 
 					::MessageBeep(MB_ICONERROR);
@@ -599,7 +637,7 @@ BOOL CMainWnd::OnFinalMessage()
 	if (!UnregisterFromDragAndDrop())
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(673);
+		ReportEventLogMsgERROR_Spec_WithFormat0(673);
 		ASSERT(NULL);
 	}
 
@@ -611,7 +649,7 @@ BOOL CMainWnd::OnFinalMessage()
 		if (!::SetEvent(_hEventStop))
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(627);
+			ReportEventLogMsgERROR_Spec_WithFormat0(627);
 			ASSERT(NULL);
 		}
 	}
@@ -631,7 +669,7 @@ BOOL CMainWnd::OnFinalMessage()
 		if (dwR != WAIT_OBJECT_0)
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(607, L"r=%d", dwR);
+			ReportEventLogMsgERROR_Spec_WithFormat(607, L"r=%d", dwR);
 			ASSERT(NULL);
 		}
 
@@ -662,27 +700,54 @@ BOOL CMainWnd::OnFinalMessage()
 }
 
 
+BOOL CMainWnd::GetLogoIconRect(RECT& rcOut)
+{
+	//Fill out 'rcOut' with dimensions of the logo icon in client coordinates
+	//RETURN:
+	//		= TRUE if success
+	BOOL bRes = FALSE;
+
+
+	HWND hAnchorWnd = ::GetDlgItem(hDlg, IDC_STATIC_ICN);
+	ASSERT(hAnchorWnd);
+	RECT rcAnchor = {};
+	if (::GetWindowRect(hAnchorWnd, &rcAnchor) &&
+		::ScreenToClient(hDlg, (POINT*)&rcAnchor) &&
+		::ScreenToClient(hDlg, ((POINT*)&rcAnchor) + 1))
+	{
+		int nMidX = (rcAnchor.left + rcAnchor.right) / 2;
+		int nMidY = (rcAnchor.top + rcAnchor.bottom) / 2;
+
+		ASSERT(_gszMainIconLogo.cx > 0 && _gszMainIconLogo.cy > 0);
+
+		rcOut.left = nMidX - _gszMainIconLogo.cx / 2;
+		rcOut.top = nMidY - _gszMainIconLogo.cy / 2;
+		rcOut.right = rcOut.left + _gszMainIconLogo.cx;
+		rcOut.bottom = rcOut.top + _gszMainIconLogo.cy;
+
+		bRes = TRUE;
+	}
+	else
+	{
+		//Set empty
+		memset(&rcOut, 0, sizeof(rcOut));
+	}
+
+	return bRes;
+}
+
 void CMainWnd::OnPaint(HDC hDC, PAINTSTRUCT& ps)
 {
 	//Painting of the main window
 	//'hDC' = device context for drawing
 	//'ps' = info about paiting surface
 
-	HWND hAnchorWnd = ::GetDlgItem(hDlg, IDC_STATIC_ICN);
-	ASSERT(hAnchorWnd);
-	RECT rcAnchor = {};
-	::GetWindowRect(hAnchorWnd, &rcAnchor);
-	::ScreenToClient(hDlg, (POINT*)&rcAnchor);
-	::ScreenToClient(hDlg, ((POINT*)&rcAnchor) + 1);
-
-	int nMidX = (rcAnchor.left + rcAnchor.right) / 2;
-	int nMidY = (rcAnchor.top + rcAnchor.bottom) / 2;
+	RECT rcLogo;
+	VERIFY(GetLogoIconRect(rcLogo));
 
 	//Draw our logo
 	ASSERT(_hIconLogo);
-	ASSERT(_gszMainIconLogo.cx > 0 && _gszMainIconLogo.cy > 0);
-	::DrawIconEx(hDC, nMidX - _gszMainIconLogo.cx / 2, nMidY - _gszMainIconLogo.cy / 2,
-		_hIconLogo, _gszMainIconLogo.cx, _gszMainIconLogo.cy, 
+	::DrawIconEx(hDC, rcLogo.left, rcLogo.top, _hIconLogo, rcLogo.right - rcLogo.left, rcLogo.bottom - rcLogo.top,
 		NULL, ::GetSysColorBrush(COLOR_BTNFACE), DI_NORMAL);
 
 }
@@ -701,7 +766,8 @@ BOOL CMainWnd::ChangeClassNameForDlgWnd(LPCTSTR pStrNewClassName)
 	BOOL bRes = FALSE;
 	int nOSError = 0;
 
-	if(pStrNewClassName && pStrNewClassName[0])
+	if(pStrNewClassName &&
+		pStrNewClassName[0])
 	{
 		WNDCLASSEXW wcx = {};
 		wcx.cbSize = sizeof(wcx);
@@ -766,7 +832,7 @@ BOOL CMainWnd::_unregisterCurrentWndClass()
 BOOL CMainWnd::PositionThisWindowInCenterOfMonitor(HMONITOR hMonitor)
 {
 	//Place this window in the center of the monitor
-	//'hMonitor' = monitor handle to use, or NULL to use monitor where the aoo was original run from (in Windows Explorer)
+	//'hMonitor' = monitor handle to use, or NULL to use the monitor where the app was originally run from (in Windows Explorer)
 	//RETURN:
 	//		= TRUE if success
 	BOOL bRes = FALSE;
@@ -781,10 +847,6 @@ BOOL CMainWnd::PositionThisWindowInCenterOfMonitor(HMONITOR hMonitor)
 
 		hMonitor = (HMONITOR)si.hStdOutput;
 	}
-
-	//WCHAR buff[256];
-	//::StringCchPrintf(buff, _countof(buff), L"h=%p, flgs=0x%X", si.hStdOutput, si.dwFlags);
-	//ShowMessageBox(buff);
 
 	MONITORINFO mi = {0};
 	mi.cbSize = sizeof(mi);
@@ -804,7 +866,7 @@ BOOL CMainWnd::PositionThisWindowInCenterOfMonitor(HMONITOR hMonitor)
 		else
 		{
 			//Failed for some reason
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(504, L"h=%p", hMon);
+			ReportEventLogMsgERROR_Spec_WithFormat(504, L"h=%p", hMon);
 			ASSERT(NULL);
 		}
 	}
@@ -987,24 +1049,38 @@ BOOL CMainWnd::OnMenuCommand(WORD wCmd, BOOL bAccelerator)
 		}
 		return TRUE;
 
+		case ID_OPTIONS_REBOOT_AND_INSTALL_UPDATES:
+		{
+			//Reboot and install updates (if available)
+			PowerOp(PWR_OP_REBOOT_WITH_UPDATES);
+		}
+		break;
+
+		case ID_OPTIONS_SHUTDOWN_AND_INSTALL_UPDATES:
+		{
+			//Shut down and install updates (if available)
+			PowerOp(PWR_OP_SHUTDOWN_WITH_UPDATES);
+		}
+		break;
+
 		case ID_OPTIONS_REBOOT_WITHOUT_UPDATES:
 		{
 			//Reboot without installation of updates
-			PowerOpNoUpdates(PWR_OP_REBOOT);
+			PowerOp(PWR_OP_REBOOT_NO_UPDATES);
 		}
 		return TRUE;
 
 		case ID_OPTIONS_SHUTDOWN_WITHOUT_UPDATES:
 		{
 			//Shut down without installation of updates
-			PowerOpNoUpdates(PWR_OP_SHUTDOWN);
+			PowerOp(PWR_OP_SHUTDOWN_NO_UPDATES);
 		}
 		return TRUE;
 
 		case ID_OPTIONS_FORCE_BSOD:
 		{
 			//Force a BSOD
-			PowerOpNoUpdates(PWR_OP_BSOD);
+			PowerOp(PWR_OP_BSOD);
 		}
 		return TRUE;
 
@@ -1021,7 +1097,7 @@ void CMainWnd::OnMenuHelpAbout()
 	if(::DialogBoxParam(this->_ghInstance, MAKEINTRESOURCE(IDD_ABOUTBOX), hDlg, _AboutDlgProc, (LPARAM)this) == -1)
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(506);
+		ReportEventLogMsgERROR_Spec_WithFormat0(506);
 		::MessageBeep(MB_ICONERROR);
 	}
 }
@@ -1036,10 +1112,12 @@ CMainWnd* CMainWnd::GetCMainWndFromHWND(HWND hWnd)
 	return pThis;
 }
 
-// Message handler for about box.
+
 INT_PTR CMainWnd::_AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	//DlgProc for the About window
     UNREFERENCED_PARAMETER(lParam);
+
     switch (message)
     {
     case WM_INITDIALOG:
@@ -1074,11 +1152,13 @@ INT_PTR CMainWnd::_AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
 	}
 
     case WM_COMMAND:
-    if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-    {
-        EndDialog(hDlg, LOWORD(wParam));
-        return (INT_PTR)TRUE;
-    }
+	{
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+	}
     break;
 
 	case WM_NOTIFY:
@@ -1263,7 +1343,6 @@ void CMainWnd::UpdateWhenToShowCtrls(BOOL bInitial)
 			::SendMessage(hWndStName, WM_SETTEXT, NULL, (LPARAM)kstrType2Names[i].pStrName);
 
 			nCurSelHrs = HRS_UNKNOWN;
-			//::SendMessage(hWndStMeasure, WM_SETTEXT, NULL, (LPARAM)kstrType2Names[i].pStrMeasure);
 
 			if(bBlockEnabled)
 			{
@@ -1309,7 +1388,6 @@ void CMainWnd::UpdateWhenToShowCtrls(BOOL bInitial)
 	{
 		//Disable all
 		::SendMessage(hWndStName, WM_SETTEXT, NULL, (LPARAM)L"");
-		//::SendMessage(hWndStMeasure, WM_SETTEXT, NULL, (LPARAM)L"");
 
 		::SendMessage(hWndCmbShowVal1, WM_SETTEXT, NULL, (LPARAM)L"");
 		::SendMessage(hWndCmbShowVal1, CB_RESETCONTENT, NULL, NULL);
@@ -1415,7 +1493,7 @@ void CMainWnd::SetCtrls(APP_SETTINGS& settings)
 		LPCTSTR pStrName;
 	}
 	kstrHideOptions[] = {
-		//Sec				Message to user
+		//Sec				Message to the user
 		{0,					L"Never (keep it until user interacts with it)"},
 		{(1 * 60),			L"After 1 minute"},
 		{(5 * 60),			L"After 5 minutes"},
@@ -1483,7 +1561,7 @@ void CMainWnd::SetCtrls(APP_SETTINGS& settings)
 	}
 
 
-	//Play warning sound
+	//Play a warning sound
 	::CheckDlgButton(hDlg, IDC_CHECK_PLAY_WARN_SOUND, settings.bUI_AllowSound ? BST_CHECKED: BST_UNCHECKED);
 
 	//Allow idle timer
@@ -1506,7 +1584,7 @@ void CMainWnd::SetCtrls(APP_SETTINGS& settings)
 		LPCTSTR pStrName;
 	}
 	kstrWhen2Show[] = {
-		//type								Message to user	
+		//type								Message to the user	
 		{UI_SH_T_SHOW_ALWAYS,				L"Always show this popup",},
 		{UI_SH_T_SHOW_EVERY_N_MINS,			L"Show this popup no sooner than:",},
 	};
@@ -1536,10 +1614,12 @@ void CMainWnd::SetCtrls(APP_SETTINGS& settings)
 RES_YES_NO_ERR CMainWnd::IsElevationRequiredToSaveChanges()
 {
 	//RETURN:
-	//		= RYNE_YES if we need to elevate our app to save changes
+	//		= RYNE_YES if we need to elevate our app to access privileged resources
 	//		= RYNE_NO if we don't need elevation
 	//		= RYNE_ERROR if error determining (check GetLastError() for info)
 
+	//INFO: We'll assume that accessing the "HKLM\Software" registry for writing can answer that question.
+	//WARNING: It may be possible that other resources are not accessible even if that registry key is!
 	HKEY hKey;
 	DWORD dwR = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_KEY_SFTWR, 0, KEY_READ | KEY_WRITE, &hKey);
 	if(dwR == ERROR_SUCCESS)
@@ -1648,7 +1728,7 @@ int CMainWnd::GetCurrentShowEveryHrsFromCtrl()
 BOOL CMainWnd::CollectDataFromUI(APP_SETTINGS& outData)
 {
 	//Collect data from UI into 'outData'
-	//INFO: Checks data for correctness and show UI errors if any
+	//INFO: Checks the data for correctness and shows UI errors if any
 	//RETURN:
 	//		= TRUE if data was collected and is valid
 	BOOL bRes = TRUE;
@@ -1722,7 +1802,7 @@ BOOL CMainWnd::CollectDataFromUI(APP_SETTINGS& outData)
 			//Error
 			if (bOn)
 			{
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(513, L"v=%d", outData.UI_ShowType);
+				ReportEventLogMsgERROR_Spec_WithFormat(513, L"v=%d", outData.UI_ShowType);
 				ASSERT(NULL);
 
 				ShowMessageBox(L"Incorrect selection in 'when to show popup'", MB_ICONERROR);
@@ -1791,7 +1871,7 @@ BOOL CMainWnd::OnCancel()
 		if (!::SetEvent(_hEventStop))
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(609);
+			ReportEventLogMsgERROR_Spec_WithFormat0(609);
 			ASSERT(NULL);
 		}
 	}
@@ -1805,7 +1885,7 @@ void CMainWnd::ShowFailedToSaveDataUI(int nSpecErr)
 {
 	//Show dialog if a call to SaveData() fails
 	int nOSError = ::GetLastError();
-	EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(nSpecErr, L"Failed to save data");
+	ReportEventLogMsgERROR_Spec_WithFormat(nSpecErr, L"Failed to save data");
 
 	WCHAR buffMsg[1024];
 	WCHAR buff[1224];
@@ -1866,226 +1946,11 @@ BOOL CMainWnd::SaveDataFromUI(BOOL bCloseWhenSaved)
 		void* pData = svDta.toBytes(&szcbData);
 		if(pData)
 		{
-			//Convert to hex string
-			size_t szchHexStrLen = szcbData * 2 + 1;
-			WCHAR* pHexStr = new (std::nothrow) WCHAR[szchHexStrLen];
-			if(pHexStr)
+			//Request elevation of the self module and run our command
+			if (_requestElevationAndRunSelf(nOSError, CMD_PARAM_RUN, pData, szcbData) != RYNE_ERROR)
 			{
-				BYTE by, byL;
-				WCHAR* pD = pHexStr;
-
-				//Add hex values for serialized data for saving
-				for(size_t i = 0; i < szcbData; i++)
-				{
-					by = *((BYTE*)pData + i);
-
-					byL = by >> 4;
-					*pD = byL < 0xA ? '0' + byL : 'a' + byL - 0xA;
-					pD++;
-
-					byL = by & 0xF;
-					*pD = byL < 0xA ? '0' + byL : 'a' + byL - 0xA;
-					pD++;
-				}
-
-				//Final null
-				*pD = 0;
-				pD++;
-
-				ASSERT(pD - pHexStr == szchHexStrLen);
-
-
-
-				//Get self path
-				WCHAR buffThis[MAX_PATH] = {};
-				::GetModuleFileName(NULL, buffThis, _countof(buffThis));
-				buffThis[_countof(buffThis) - 1] = 0;
-
-				//Make unique event name
-				WCHAR buffEvent[128] = {};
-				FILETIME ftUtc = {};
-				::GetSystemTimeAsFileTime(&ftUtc);
-				::StringCchPrintf(buffEvent, _countof(buffEvent), 
-					L"%08x%08x%08x%08x"
-					,
-					::GetCurrentProcessId(),
-					::GetCurrentThreadId(),
-					ftUtc.dwHighDateTime,
-					ftUtc.dwLowDateTime
-					);
-
-				//Get monitor where our window is now (so that we can show our new elevated window in the same monotor)
-				HMONITOR hMonitor = ::MonitorFromWindow(hDlg, MONITOR_DEFAULTTONEAREST);
-
-				WCHAR buffMonH[32] = {};
-				ASSERT(sizeof(hMonitor) == sizeof(void*));
-				::StringCchPrintf(buffMonH, _countof(buffMonH),
-#ifdef _M_X64
-					L"%016Ix"
-#else
-					L"%08Ix"
-#endif
-					,
-					hMonitor);
-
-
-				//Make command line
-				size_t szchCmdLn = TSIZEOF(CMD_PARAM_RUN L" ") + szchHexStrLen + TSIZEOF(L" ") + wcslen(buffEvent) + TSIZEOF(L" ") + wcslen(buffMonH);
-				WCHAR* pCmdLine = new (std::nothrow) WCHAR[szchCmdLn + 1];
-				if(pCmdLine)
-				{
-					//Compose command line
-					HRESULT hr = ::StringCchPrintf(pCmdLine, szchCmdLn, 
-						L"%s %s %s %s"
-						,
-						CMD_PARAM_RUN,
-						pHexStr,
-						buffEvent,
-						buffMonH
-						);
-
-					if(hr == S_OK)
-					{
-						//Create an event
-						HANDLE hEvent = ::CreateEvent(NULL, TRUE, FALSE, buffEvent);
-						if(hEvent)
-						{
-
-							//Init COM
-							BOOL bComInitted = SUCCEEDED(::CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE));
-
-							//Prep the struct
-							SHELLEXECUTEINFO sei = {0};
-							sei.cbSize = sizeof(sei);
-							sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI | SEE_MASK_UNICODE /*| SEE_MASK_HMONITOR*/;
-							sei.hwnd = NULL;
-							sei.lpVerb = L"runas";			//Request elevation
-							sei.lpFile = buffThis;
-							sei.lpParameters = pCmdLine;
-							sei.nShow = SW_SHOW;
-
-							////Get monitor where our window is
-							//sei.hMonitor = hMonitor;					//Can't use it here because of the bug in Windows that somehow always wants to use primary monitor :(
-
-
-							//Run the app
-							if(::ShellExecuteEx(&sei))
-							{
-								//Started evelated
-								SHOW_WAIT_CURSOR waitCursor2;
-
-								//Wait for our event
-								//INFO: It will be signaled by the child process that we just started, if it got our data
-								DWORD dwRw = ::WaitForSingleObject(hEvent, 3 * 1000);
-
-								if(dwRw == WAIT_OBJECT_0)
-								{
-									//Started OK
-
-									//We can now close self
-									if(::PostMessage(hDlg, WM_CLOSE, 0, 0))
-									{
-										//And don't show an error message
-										bShowUserErrorMsg = FALSE;
-										bAllowToClose = FALSE;
-									}
-									else
-									{
-										//Error
-										nOSError = ::GetLastError();
-										EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(522, L"exe=\"%s\", cmd=\"%s\"", buffThis, pCmdLine);
-										ASSERT(NULL);
-									}
-								}
-								else if(dwRw == WAIT_TIMEOUT)
-								{
-									//Timed out
-									nOSError = ERROR_TIMEOUT;
-									EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(521, L"exe=\"%s\", cmd=\"%s\"", buffThis, pCmdLine);
-								}
-								else
-								{
-									//Error
-									nOSError = ::GetLastError();
-									EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(520, L"exe=\"%s\", cmd=\"%s\"", buffThis, pCmdLine);
-									ASSERT(NULL);
-								}
-
-							}
-							else
-							{
-								//See why we failed
-								nOSError = ::GetLastError();
-
-								if(nOSError == ERROR_CANCELLED)
-								{
-									//User cancel UAC prompt
-									bShowUserErrorMsg = FALSE;
-								}
-								else
-								{
-									//Some error
-									EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(517, L"exe=\"%s\", cmd=\"%s\"", buffThis, pCmdLine);
-									ASSERT(NULL);
-								}
-							}
-
-
-							//Close handles
-							if(sei.hProcess)
-							{
-								VERIFY(::CloseHandle(sei.hProcess));
-								sei.hProcess = NULL;
-							}
-
-							VERIFY(::CloseHandle(hEvent));
-							hEvent = NULL;
-
-							//Uninit COM
-							if(bComInitted)
-								::CoUninitialize();
-						}
-						else
-						{
-							//Error
-							nOSError = ::GetLastError();
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(519, L"nm=%s", buffEvent);
-							ASSERT(NULL);
-						}
-					}
-					else
-					{
-						//Failed to make cmd line
-						nOSError = (int)hr;
-						::SetLastError(nOSError);
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(518, L"sz=%Iu", szchCmdLn);
-						ASSERT(NULL);
-					}
-
-
-					//Free mem
-					delete[] pCmdLine;
-					pCmdLine = NULL;
-				}
-				else
-				{
-					//Error
-					nOSError = ERROR_OUTOFMEMORY;
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(518, L"sz=%Iu", szchCmdLn);
-					ASSERT(NULL);
-				}
-
-
-				//Free mem
-				delete[] pHexStr;
-				pHexStr = NULL;
-			}
-			else
-			{
-				//Error
-				nOSError = ERROR_OUTOFMEMORY;
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(516);
-				ASSERT(NULL);
+				//Didn't fail
+				bShowUserErrorMsg = FALSE;
 			}
 
 
@@ -2097,7 +1962,7 @@ BOOL CMainWnd::SaveDataFromUI(BOOL bCloseWhenSaved)
 		{
 			//Error
 			nOSError = ::GetLastError();
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(515);
+			ReportEventLogMsgERROR_Spec_WithFormat0(515);
 			ASSERT(NULL);
 		}
 
@@ -2119,6 +1984,258 @@ BOOL CMainWnd::SaveDataFromUI(BOOL bCloseWhenSaved)
 	return bAllowToClose;
 }
 
+RES_YES_NO_ERR CMainWnd::_requestElevationAndRunSelf(int& nOSError, LPCTSTR pStrCmdRun, const void* pValue, size_t szcbValue, DWORD dwmsTimeout)
+{
+	//'nOSError' = must be initialzed to -1 - will receive OS error code if any
+	//'pStrCmdRun' = command to run -- should not contain spaces!
+	//'pValue' = value for command to run as a BYTE array
+	//'szcbValue' = size of 'pValue' in BYTEs -- cannot be 0!
+	//'dwmsTimeout' = timeout in ms to wait for the elevated process to respond back with confirmation that it started OK
+	//RETURN:
+	//		RYNE_YES	= if success starting self process elevated (the current process will close shortly)
+	//		RYNE_NO		= if user canceled elevation request (don't do anything)
+	//		RYNE_ERROR	= if error and we need to show an error message, its code is passed back in 'nOSError'
+	assert(pStrCmdRun && pStrCmdRun[0]);
+	assert(_tcschr(pStrCmdRun, L' ') == NULL);
+
+	RES_YES_NO_ERR result = RYNE_ERROR;
+
+	if (pValue &&
+		(intptr_t)szcbValue > 0)
+	{
+		//Convert to hex string
+		size_t szchHexStrLen = szcbValue * 2 + 1;
+		WCHAR* pHexStr = new (std::nothrow) WCHAR[szchHexStrLen];
+		if (pHexStr)
+		{
+			BYTE by, byL;
+			WCHAR* pD = pHexStr;
+
+			//Add hex values for serialized data for saving
+			for (size_t i = 0; i < szcbValue; i++)
+			{
+				by = *((BYTE*)pValue + i);
+
+				byL = by >> 4;
+				*pD = byL < 0xA ? '0' + byL : 'a' + byL - 0xA;
+				pD++;
+
+				byL = by & 0xF;
+				*pD = byL < 0xA ? '0' + byL : 'a' + byL - 0xA;
+				pD++;
+			}
+
+			//Final null
+			*pD = 0;
+			pD++;
+
+			ASSERT(pD - pHexStr == szchHexStrLen);
+
+
+
+			//Get self path
+			WCHAR buffThis[MAX_PATH] = {};
+			::GetModuleFileName(NULL, buffThis, _countof(buffThis));
+			buffThis[_countof(buffThis) - 1] = 0;
+
+			//Make unique event name
+			WCHAR buffEvent[128] = {};
+			FILETIME ftUtc = {};
+			::GetSystemTimeAsFileTime(&ftUtc);
+			::StringCchPrintf(buffEvent, _countof(buffEvent),
+				L"%08x%08x%08x%08x"
+				,
+				::GetCurrentProcessId(),
+				::GetCurrentThreadId(),
+				ftUtc.dwHighDateTime,
+				ftUtc.dwLowDateTime
+			);
+
+			//Get the monitor where our window is now (so that we can show our new elevated window in the same monitor)
+			HMONITOR hMonitor = ::MonitorFromWindow(hDlg, MONITOR_DEFAULTTONEAREST);
+
+			WCHAR buffMonH[32] = {};
+			ASSERT(sizeof(hMonitor) == sizeof(void*));
+			::StringCchPrintf(buffMonH, _countof(buffMonH),
+#ifdef _M_X64
+				L"%016Ix"
+#else
+				L"%08Ix"
+#endif
+				,
+				hMonitor);
+
+			//Make command line: Command EventName MonitorHandle CommandValue
+			size_t szchCmdLn = wcslen(pStrCmdRun) + TSIZEOF(L" ") + wcslen(buffEvent) + TSIZEOF(L" ") + wcslen(buffMonH) + TSIZEOF(L" ") + szchHexStrLen;
+			WCHAR* pCmdLine = new (std::nothrow) WCHAR[szchCmdLn + 1];
+			if (pCmdLine)
+			{
+				//Compose command line
+				HRESULT hr = ::StringCchPrintf(pCmdLine, szchCmdLn,
+					L"%s %s %s %s"
+					,
+					pStrCmdRun,
+					buffEvent,
+					buffMonH,
+					pHexStr
+				);
+
+				if (hr == S_OK)
+				{
+					//Create an event
+					HANDLE hEvent = ::CreateEvent(NULL, TRUE, FALSE, buffEvent);
+					if (hEvent)
+					{
+
+						//Init COM
+						BOOL bComInitted = SUCCEEDED(::CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE));
+
+						//Prep the struct
+						SHELLEXECUTEINFO sei = { 0 };
+						sei.cbSize = sizeof(sei);
+						sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI | SEE_MASK_UNICODE /*| SEE_MASK_HMONITOR*/;
+						sei.hwnd = NULL;
+						sei.lpVerb = L"runas";			//Request elevation
+						sei.lpFile = buffThis;
+						sei.lpParameters = pCmdLine;
+						sei.nShow = SW_SHOW;
+
+						////Get monitor where our window is
+						//sei.hMonitor = hMonitor;					//Can't use it here because of the bug in Windows that somehow always wants to use the primary monitor :(
+
+
+						//Run the app
+						if (::ShellExecuteEx(&sei))
+						{
+							//Started evelated
+							SHOW_WAIT_CURSOR waitCursor2;
+
+							//Wait for our event
+							//INFO: It will be signaled by the child process that we just started, if it got our data
+							DWORD dwRw = ::WaitForSingleObject(hEvent, dwmsTimeout);
+
+							if (dwRw == WAIT_OBJECT_0)
+							{
+								//Started OK
+
+								//We can now close self
+								if (::PostMessage(hDlg, WM_CLOSE, 0, 0))
+								{
+									//Done!
+									result = RYNE_YES;
+								}
+								else
+								{
+									//Error
+									nOSError = ::GetLastError();
+									ReportEventLogMsgERROR_Spec_WithFormat(522, L"exe=\"%s\", cmd=\"%s\"", buffThis, pCmdLine);
+									ASSERT(NULL);
+								}
+							}
+							else if (dwRw == WAIT_TIMEOUT)
+							{
+								//Timed out
+								nOSError = ERROR_TIMEOUT;
+								ReportEventLogMsgERROR_Spec_WithFormat(521, L"exe=\"%s\", cmd=\"%s\"", buffThis, pCmdLine);
+							}
+							else
+							{
+								//Error
+								nOSError = ::GetLastError();
+								ReportEventLogMsgERROR_Spec_WithFormat(520, L"exe=\"%s\", cmd=\"%s\"", buffThis, pCmdLine);
+								ASSERT(NULL);
+							}
+
+						}
+						else
+						{
+							//See why we failed
+							nOSError = ::GetLastError();
+
+							if (nOSError == ERROR_CANCELLED)
+							{
+								//User canceled the UAC prompt
+								result = RYNE_NO;
+							}
+							else
+							{
+								//Some error
+								ReportEventLogMsgERROR_Spec_WithFormat(517, L"exe=\"%s\", cmd=\"%s\"", buffThis, pCmdLine);
+								ASSERT(NULL);
+							}
+						}
+
+
+						//Close handles
+						if (sei.hProcess)
+						{
+							VERIFY(::CloseHandle(sei.hProcess));
+							sei.hProcess = NULL;
+						}
+
+						VERIFY(::CloseHandle(hEvent));
+						hEvent = NULL;
+
+						//Uninit COM
+						if (bComInitted)
+							::CoUninitialize();
+					}
+					else
+					{
+						//Error
+						nOSError = ::GetLastError();
+						ReportEventLogMsgERROR_Spec_WithFormat(519, L"nm=%s", buffEvent);
+						ASSERT(NULL);
+					}
+				}
+				else
+				{
+					//Failed to make cmd line
+					nOSError = (int)hr;
+					::SetLastError(nOSError);
+					ReportEventLogMsgERROR_Spec_WithFormat(518, L"sz=%Iu", szchCmdLn);
+					ASSERT(NULL);
+				}
+
+
+				//Free mem
+				delete[] pCmdLine;
+				pCmdLine = NULL;
+			}
+			else
+			{
+				//Error
+				nOSError = ERROR_OUTOFMEMORY;
+				ReportEventLogMsgERROR_Spec_WithFormat(518, L"sz=%Iu", szchCmdLn);
+				ASSERT(NULL);
+			}
+
+
+			//Free mem
+			delete[] pHexStr;
+			pHexStr = NULL;
+		}
+		else
+		{
+			//Error
+			nOSError = ERROR_OUTOFMEMORY;
+			ReportEventLogMsgERROR_Spec_WithFormat0(516);
+			ASSERT(NULL);
+		}
+	}
+	else
+	{
+		//Error
+		nOSError = ERROR_INVALID_PARAMETER;
+		ReportEventLogMsgERROR_Spec_WithFormat0(702);
+		ASSERT(NULL);
+	}
+
+	return result;
+}
+
+
+
 CMD_LINE_PARSE_RESULTS CMainWnd::ParseCommandLine()
 {
 	//Parse command line parameters that were passed into the app
@@ -2126,98 +2243,172 @@ CMD_LINE_PARSE_RESULTS CMainWnd::ParseCommandLine()
 	//		= Bitwise result of parsing command line
 	CMD_LINE_PARSE_RESULTS res = CLPR_None;
 
-	//Check for special command line parameters that can be passed by SaveDataFromUI()
-	if(__argc == 5)
+	//Check for special command line parameters that can be passed to us
+	if(__argc == 4 + 1)
 	{
 		int p = 1;
 
-		//Ex: r 02000000010000002c01000001000000000000000100000003000000 0000ea700000f56001d67f58b47f3b04 0000000000010007
-		if(_wcsicmp(__wargv[p++], CMD_PARAM_RUN) == 0)
+		enum CMD_TYPE {
+			CMD_T_None,
+
+			CMD_T_RUN,
+			CMD_T_PWR_OP,
+		}
+		cmdType = CMD_T_None;
+
+		LPCTSTR pStrCmdNm = __wargv[p++];
+
+		if (_wcsicmp(pStrCmdNm, CMD_PARAM_RUN) == 0)				//Ex: r 0000ea700000f56001d67f58b47f3b04 0000000000010007 02000000010000002c01000001000000000000000100000003000000
+			cmdType = CMD_T_RUN;
+		else if (_wcsicmp(pStrCmdNm, CMD_PARAM_POWER_OP) == 0)		//Ex: p 0000ea700000f56001d67f58b47f3b04 0000000000010007 01
+			cmdType = CMD_T_PWR_OP;
+		else
 		{
-			//Convert hex string into binary
-			LPCTSTR pStrHex = __wargv[p++];
-			size_t szchLnHex = wcslen(pStrHex);
-			if((szchLnHex % 2) == 0)
+			//Unsupported command
+			ReportEventLogMsgERROR_Spec_WithFormat(715, L"Unsupported command: \"%s\" in cmd: %s", pStrCmdNm, ::GetCommandLineW());
+		}
+
+		// Command EventName MonitorHandle CommandValue
+		if(cmdType != CMD_T_None)
+		{
+			//Get the event name
+			LPCTSTR pStrEventName = __wargv[p++];
+
+			if (pStrEventName &&
+				pStrEventName[0])
 			{
-				BYTE* pData = new (std::nothrow) BYTE[szchLnHex / 2];
-				if(pData)
+				//Get the monitor handle
+				LPCTSTR pStrMonH = __wargv[p++];
+				size_t nMonH = 0;
+				if (swscanf_s(pStrMonH, L"%Ix", &nMonH) != 1)
 				{
-					BOOL bParsedOK = TRUE;
-					BYTE* pD = pData;
-					BYTE by;
+					//Failed to scan it -- but not a crtitical error
+					ReportEventLogMsgERROR_Spec_WithFormat(534, L"cmd: %s", ::GetCommandLineW());
+					ASSERT(NULL);
+				}
 
-					for(size_t i = 0; i < szchLnHex; i++)
+
+				//Convert hex string into binary
+				LPCTSTR pStrHex = __wargv[p++];
+				size_t szchLnHex = wcslen(pStrHex);
+				if ((szchLnHex % 2) == 0)
+				{
+					BYTE* pData = new (std::nothrow) BYTE[szchLnHex / 2];
+					if (pData)
 					{
-						WCHAR c = pStrHex[i];
+						BOOL bParsedOK = TRUE;
+						BYTE* pD = pData;
+						BYTE by;
 
-						if(c >= '0' && c <= '9')
-							by = c - '0';
-						else if(c >= 'a' && c <= 'f')
-							by = c - 'a' + 10;
-						else if(c >= 'A' && c <= 'F')
-							by = c - 'A' + 10;
-						else
+						for (size_t i = 0; i < szchLnHex; i++)
 						{
-							//Bad char
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(525, L"c=%c, i=%Iu, cmd: %s", c, i, ::GetCommandLineW());
-							ASSERT(NULL);
+							WCHAR c = pStrHex[i];
 
-							bParsedOK = FALSE;
-							break;
-						}
-
-						if(!(i & 1))
-						{
-							*pD = by << 4;
-						}
-						else
-						{
-							*pD |= by;
-							pD++;
-						}
-					}
-
-					if(bParsedOK)
-					{
-						ASSERT(pD - pData == szchLnHex / 2);
-
-						//Deserialize data back
-						if(g_CmdSvData.fromBytes(pData, szchLnHex / 2))
-						{
-							//Finally get the event name
-							LPCTSTR pStrEventName = __wargv[p++];
-
-							if(pStrEventName &&
-								pStrEventName[0])
+							if (c >= '0' && c <= '9')
+								by = c - '0';
+							else if (c >= 'a' && c <= 'f')
+								by = c - 'a' + 10;
+							else if (c >= 'A' && c <= 'F')
+								by = c - 'A' + 10;
+							else
 							{
-								//Open such event (it must have been created by us earlier)
+								//Bad char
+								ReportEventLogMsgERROR_Spec_WithFormat(525, L"c=%c, i=%Iu, cmd: %s", c, i, ::GetCommandLineW());
+								ASSERT(NULL);
+
+								bParsedOK = FALSE;
+								break;
+							}
+
+							if (!(i & 1))
+							{
+								*pD = by << 4;
+							}
+							else
+							{
+								*pD |= by;
+								pD++;
+							}
+						}
+
+						if (bParsedOK)
+						{
+							size_t szcbData = szchLnHex / 2;
+							ASSERT(pD - pData == szcbData);
+
+							CMD_LINE_PARSE_RESULTS parseType = CLPR_None;
+
+							//Verify value for the command
+							if (cmdType == CMD_T_RUN)
+							{
+								//Deserialize data back
+								if (g_CmdSvData.fromBytes(pData, szcbData))
+								{
+									parseType = CLPR_AUTO_SAVE_ELEVATED;
+								}
+								else
+								{
+									//Failed to deserialize
+									ReportEventLogMsgERROR_Spec_WithFormat(526, L"cmd: %s", ::GetCommandLineW());
+									ASSERT(NULL);
+								}
+							}
+							else if (cmdType == CMD_T_PWR_OP)
+							{
+								//Requesting to perform power operation
+								if (szcbData == sizeof(g_CmdSvPowerOp))
+								{
+									POWER_OP pwrOp = *(POWER_OP*)pData;
+									if (pwrOp > PWR_OP_None &&
+										pwrOp < PWR_OP_Last)
+									{
+										//All good
+										parseType = CLPR_AUTO_POWER_OP_ELEVATED;
+
+										g_CmdSvPowerOp = pwrOp;
+									}
+									else
+									{
+										//Bad value
+										ReportEventLogMsgERROR_Spec_WithFormat(707, L"p=%d, cmd: %s", pwrOp, ::GetCommandLineW());
+										ASSERT(NULL);
+									}
+								}
+								else
+								{
+									//Bad data
+									ReportEventLogMsgERROR_Spec_WithFormat(706, L"sz=%Id, cmd: %s", szcbData, ::GetCommandLineW());
+									ASSERT(NULL);
+								}
+							}
+							else
+							{
+								ReportEventLogMsgERROR_Spec_WithFormat(703, L"v=%d, cmd: %s", cmdType, ::GetCommandLineW());
+								ASSERT(NULL);
+							}
+
+
+							//Can we continue
+							if (parseType != CLPR_None)
+							{
+								//Open passed named event (it must have been created by the caller earlier)
 								HANDLE hEvent = ::OpenEvent(EVENT_MODIFY_STATE, FALSE, pStrEventName);
-								if(hEvent)
+								if (hEvent)
 								{
 									//And set it to signal the waiting "Self" that we got the data
-									if(::SetEvent(hEvent))
+									if (::SetEvent(hEvent))
 									{
-										//Finally get the monitor handle
-										LPCTSTR pStrMonH = __wargv[p++];
-										size_t nMonH = 0;
-										if(swscanf_s(pStrMonH, L"%Ix", &nMonH) == 1)
-										{
-											_ghCmdMonitor = (HMONITOR)nMonH;
-										}
-										else
-										{
-											//Failed to scan it -- but not a crtitical error
-											EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(534, L"cmd: %s", ::GetCommandLineW());
-											ASSERT(NULL);
-										}
 
-										//Good, now we're done
-										(UINT&)res |= CLPR_AUTO_SAVE_ELEVATED;
+										//Remember monitor handle for use later
+										_ghCmdMonitor = (HMONITOR)nMonH;
+
+										//Good, now we're done here!
+										(UINT&)res |= parseType;
 									}
 									else
 									{
 										//Couldn't set the event
-										EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(529, L"cmd: %s", ::GetCommandLineW());
+										ReportEventLogMsgERROR_Spec_WithFormat(529, L"cmd: %s", ::GetCommandLineW());
 										ASSERT(NULL);
 									}
 
@@ -2228,54 +2419,50 @@ CMD_LINE_PARSE_RESULTS CMainWnd::ParseCommandLine()
 								else
 								{
 									//Couldn't open the event by name
-									EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(528, L"nm=\"%s\", cmd: %s", pStrEventName, ::GetCommandLineW());
+									ReportEventLogMsgERROR_Spec_WithFormat(528, L"nm=\"%s\", cmd: %s", pStrEventName, ::GetCommandLineW());
 									ASSERT(NULL);
 								}
 							}
-							else
-							{
-								//Bad name
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(527, L"cmd: %s", ::GetCommandLineW());
-								ASSERT(NULL);
-							}
 						}
-						else
-						{
-							//Failed to deserialize
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(526, L"cmd: %s", ::GetCommandLineW());
-							ASSERT(NULL);
-						}
+
+
+						//Free mem
+						delete[] pData;
+						pData = NULL;
 					}
-
-
-					//Free mem
-					delete[] pData;
-					pData = NULL;
+					else
+					{
+						ReportEventLogMsgERROR_Spec_WithFormat(524, L"cmd: %s", ::GetCommandLineW());
+						ASSERT(NULL);
+					}
 				}
 				else
 				{
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(524, L"cmd: %s", ::GetCommandLineW());
+					ReportEventLogMsgERROR_Spec_WithFormat(523, L"cmd: %s", ::GetCommandLineW());
 					ASSERT(NULL);
 				}
+
 			}
 			else
 			{
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(523, L"cmd: %s", ::GetCommandLineW());
+				//Bad name
+				ReportEventLogMsgERROR_Spec_WithFormat(527, L"cmd: %s", ::GetCommandLineW());
 				ASSERT(NULL);
 			}
 
+		}
 
-			//Did we succeed?
-			if(!(res & CLPR_AUTO_SAVE_ELEVATED))
-			{
-				//Play error sound
-				::MessageBeep(MB_ICONERROR);
-			}
+
+		//Did we succeed?
+		if(res == CLPR_None)
+		{
+			//Play error sound
+			::MessageBeep(MB_ICONERROR);
 		}
 	}
 	else if (__argc == 2)
 	{
-		//See if we were passed a file in a command line argument
+		//See if we were passed a file path in a command line argument
 		//INFO: Like if a user dragged it into the icon of our program in the Windows Explorer
 		LPCTSTR pStrFilePath = __wargv[1];
 
@@ -2341,7 +2528,9 @@ BOOL CMainWnd::SaveData(APP_SETTINGS& data)
 	}
 
 
-	//Create shared key
+	//Create a shared key
+	//INFO: We need to make this key shared so that we can write our persistent settings into it from the VULN_SHELL_DLL_FILE_NAME module
+	//      that can run under different user accounts and with various permissions
 	if(!AUX_FUNCS::CreateHKLMSharedKey())
 	{
 		nOSError = ::GetLastError();
@@ -2356,7 +2545,7 @@ BOOL CMainWnd::SaveData(APP_SETTINGS& data)
 
 int CMainWnd::ShellExecuteWithMonitor(HWND hWnd, LPCTSTR lpOperation, LPCTSTR lpFile, LPCTSTR lpParameters, LPCTSTR lpDirectory, INT nShowCmd, HWND hWndToUseForMonitor, ULONG uiFlags, HANDLE* phOutProcess)
 {
-	//Same as ShellExecute, except that it runs in the same monitor as the one where this app started from
+	//Same as ShellExecute, except that it runs in a specific monitor
 	//'hWndToUseForMonitor' = if not NULL, must specify the window to use to detect the monitor that it's in to pass to the program that is being started
 	//						  if NULL, the monitor that the app was started from will be used
 	//'uiFlags' = flags for ShellExecuteEx call, such as: SEE_MASK_FLAG_NO_UI or SEE_MASK_NO_CONSOLE or SEE_MASK_WAITFORINPUTIDLE, etc.
@@ -2379,7 +2568,7 @@ int CMainWnd::ShellExecuteWithMonitor(HWND hWnd, LPCTSTR lpOperation, LPCTSTR lp
 
 	if(hWndToUseForMonitor)
 	{
-		//Get current monitor
+		//Get monitor from the window
 		HMONITOR hMonMainWnd = ::MonitorFromWindow(hWndToUseForMonitor, MONITOR_DEFAULTTONULL);
 		if(hMonMainWnd)
 		{
@@ -2452,7 +2641,7 @@ BOOL CMainWnd::OpenWebPage(LPCTSTR pStrURI)
 
 BOOL CMainWnd::OpenWebPageWithErrorUI(LPCTSTR pStrURI)
 {
-	//Save as OpenWebPage() but will show a user error message if opening fails
+	//Same as OpenWebPage() but will show a user error message if opening fails
 	//RETURN:
 	//		= TRUE if success
 	//		= FALSE if error (check GetLastError() for info)
@@ -2464,7 +2653,7 @@ BOOL CMainWnd::OpenWebPageWithErrorUI(LPCTSTR pStrURI)
 
 	//Show user error
 	int nOSError = ::GetLastError();
-	EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(536, L"%s", pStrURI);
+	ReportEventLogMsgERROR_Spec_WithFormat(536, L"%s", pStrURI);
 
 	//Format error message
 	WCHAR buffMsg[1024];
@@ -2495,7 +2684,7 @@ BOOL CMainWnd::OpenWebPageWithErrorUI(LPCTSTR pStrURI)
 	else
 	{
 		//Failed?
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(537, L"sz=%Iu", szchLnBuff);
+		ReportEventLogMsgERROR_Spec_WithFormat(537, L"sz=%Iu", szchLnBuff);
 		ASSERT(NULL);
 		::MessageBeep(MB_ICONERROR);
 	}
@@ -2634,7 +2823,7 @@ BOOL CMainWnd::OpenEventLog()
 	}
 
 	//Show user error
-	EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(535, L"h=%p, path: %s", hDlg, buffPath);
+	ReportEventLogMsgERROR_Spec_WithFormat(535, L"h=%p, path: %s", hDlg, buffPath);
 
 	WCHAR buffMsg[1024];
 	WCHAR buff[1224];
@@ -2650,7 +2839,7 @@ BOOL CMainWnd::OpenEventLog()
 
 BOOL CMainWnd::SubmitBugReport()
 {
-	//Open web page to allow user to submit bug report
+	//Open web page to allow user to submit a bug report
 	//RETURN:
 	//		= TRUE if success
 	//		= FALSE if error (check GetLastError() for info)
@@ -2752,7 +2941,7 @@ void CMainWnd::OnCheckForUpdates()
 
 void CMainWnd::OnShowBlogPost()
 {
-	//Open blog post with descriptions of the research that went into making this app
+	//Open the blog post with description of the research that went into making this app
 
 	OpenWebPageWithErrorUI(URL_BLOG_POST);
 }
@@ -2760,7 +2949,7 @@ void CMainWnd::OnShowBlogPost()
 
 RES_YES_NO_ERR CMainWnd::IsShellChromeAPI_Installed(BOOL bShowErrorUI)
 {
-	//'bShowErrorUI' = TRUE to show error message UI in case it is not installed or if there's an error
+	//'bShowErrorUI' = TRUE to show an error message UI in case our VULN_SHELL_DLL_FILE_NAME module is not installed or if there's an error
 	//RETURN:
 	///	RYNE_YES = if our ShellChromeAPI.dll is in the system folder
 	//	RYNE_NO  = if no, it is not
@@ -2768,22 +2957,34 @@ RES_YES_NO_ERR CMainWnd::IsShellChromeAPI_Installed(BOOL bShowErrorUI)
 	RES_YES_NO_ERR res = RYNE_ERROR;
 	int nOSError = 0;
 
+	//The module must be in the system32 folder
 	HMODULE hMod = ::LoadLibraryEx(VULN_SHELL_DLL_FILE_NAME, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
 	if (hMod)
 	{
-		UINT(WINAPI* pfnTestCorrectDll)(int) = NULL;
+		//Call our special function in our DLL
+		LPCTSTR (WINAPI* pfnTestCorrectDll)(void) = NULL;
 		(FARPROC&)pfnTestCorrectDll = ::GetProcAddress(hMod, "TestCorrectDll");
 		if (pfnTestCorrectDll)
 		{
-			if (pfnTestCorrectDll(NULL) == SHELL_CHROME_API_ID_STAMP)
+			__try
 			{
-				//Got it
-				res = RYNE_YES;
+				//And check that the version returned from the DLL matches ours
+				if (lstrcmp(pfnTestCorrectDll(), MAIN_APP_VER) == 0)
+				{
+					//Got it!
+					res = RYNE_YES;
+				}
+				else
+				{
+					//Wrong version
+					nOSError = 1828;
+				}
 			}
-			else
+			__except (EXCEPTION_EXECUTE_HANDLER)
 			{
-				//Wrong version
-				nOSError = 1828;
+				//Exception
+				ReportEventLogMsgERROR_Spec_WithFormat0(716);
+				nOSError = 310;
 			}
 		}
 		else
@@ -2792,6 +2993,7 @@ RES_YES_NO_ERR CMainWnd::IsShellChromeAPI_Installed(BOOL bShowErrorUI)
 			nOSError = 1756;
 		}
 
+		//Free library
 		::FreeLibrary(hMod);
 	}
 	else
@@ -2817,7 +3019,7 @@ RES_YES_NO_ERR CMainWnd::IsShellChromeAPI_Installed(BOOL bShowErrorUI)
 			) == S_OK);
 
 			::SetLastError(nOSError);
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(540, L"res=%d", res);
+			ReportEventLogMsgERROR_Spec_WithFormat(540, L"res=%d", res);
 			ShowMessageBox(buff, MB_ICONERROR);
 		}
 	}
@@ -2828,7 +3030,7 @@ RES_YES_NO_ERR CMainWnd::IsShellChromeAPI_Installed(BOOL bShowErrorUI)
 
 BOOL CMainWnd::_enumProcCloseAll(HWND hWnd, LPARAM lParam)
 {
-	//Close window if it's not our main
+	//Close a window if it's not our main window
 	HWND hWndThis = (HWND)lParam;
 	if (hWnd != hWndThis)
 	{
@@ -2890,7 +3092,7 @@ BOOL CMainWnd::CloseAllWindowsExceptMainWnd()
 					EnumThreadWindows(te32.th32ThreadID, _enumProcCloseAll, (LPARAM)hDlg);
 				}
 
-				//Go to next one
+				//Go to next thread
 				if(!Thread32Next(hEnum, &te32))
 				{
 					if (::GetLastError() == ERROR_NO_MORE_FILES)
@@ -2901,7 +3103,7 @@ BOOL CMainWnd::CloseAllWindowsExceptMainWnd()
 					else
 					{
 						//Error
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(613);
+						ReportEventLogMsgERROR_Spec_WithFormat0(613);
 						ASSERT(NULL);
 					}
 					
@@ -2912,7 +3114,7 @@ BOOL CMainWnd::CloseAllWindowsExceptMainWnd()
 		else
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(612);
+			ReportEventLogMsgERROR_Spec_WithFormat0(612);
 			ASSERT(NULL);
 		}
 
@@ -2922,7 +3124,7 @@ BOOL CMainWnd::CloseAllWindowsExceptMainWnd()
 	else
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(611);
+		ReportEventLogMsgERROR_Spec_WithFormat0(611);
 		ASSERT(NULL);
 	}
 
@@ -2976,7 +3178,7 @@ DWORD CMainWnd::ThreadProc_EventsWorker(LPVOID lpParameter)
 					if (!::PostMessage(hMainWnd, WM_CLOSE, 0, 0))
 					{
 						//Failed
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(614, L"h=0x%p", hMainWnd);
+						ReportEventLogMsgERROR_Spec_WithFormat(614, L"h=0x%p", hMainWnd);
 						ASSERT(NULL);
 
 						bResClosedAll = FALSE;
@@ -2986,7 +3188,7 @@ DWORD CMainWnd::ThreadProc_EventsWorker(LPVOID lpParameter)
 			else
 			{
 				//Failed
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(619);
+				ReportEventLogMsgERROR_Spec_WithFormat0(619);
 				ASSERT(NULL);
 			}
 
@@ -2994,13 +3196,13 @@ DWORD CMainWnd::ThreadProc_EventsWorker(LPVOID lpParameter)
 			if (!bResClosedAll)
 			{
 				//Have no choice but to kill the self process
-				EVENT_LOG_REPORTS::ReportEventLogMsgWARNING_WithFormat(L"[620] Terminating self");
+				ReportEventLogMsgWARNING_WithFormat(L"[620] Terminating self");
 
 				//INFO: We'll use a function that should signal to terminate this process unconditionally
 				if (!::TerminateProcess(::GetCurrentProcess(), 0xdead0001))
 				{
 					//Even that failed
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(621);
+					ReportEventLogMsgERROR_Spec_WithFormat0(621);
 					::ExitProcess(0xdead0002);
 				}
 			}
@@ -3012,7 +3214,7 @@ DWORD CMainWnd::ThreadProc_EventsWorker(LPVOID lpParameter)
 			if (!hDudEvent)
 			{
 				//Error
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(615);
+				ReportEventLogMsgERROR_Spec_WithFormat0(615);
 				ASSERT(NULL);
 			}
 
@@ -3021,7 +3223,7 @@ DWORD CMainWnd::ThreadProc_EventsWorker(LPVOID lpParameter)
 		else
 		{
 			//Error
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(610, L"r=%d", dwR);
+			ReportEventLogMsgERROR_Spec_WithFormat(610, L"r=%d", dwR);
 
 			break;
 		}
@@ -3042,7 +3244,7 @@ DWORD CMainWnd::ThreadProc_EventsWorker(LPVOID lpParameter)
 
 LPCTSTR CMainWnd::ConvertStringsNulls(std::wstring* pStr, TCHAR chAnchor)
 {
-	//Replace all occurances of 'chAnchor' in 'pStr' with \0's
+	//Replace all occurrances of 'chAnchor' in 'pStr' with \0's
 	//RETURN:
 	//		= Pointer to converted string (INFO: The pointer is valid in the scope of 'pStr')
 	ASSERT(pStr);
@@ -3190,7 +3392,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 			{
 				if (FAILED(hr = pIFileDialog->SetTitle(pStrTitle)))
 				{
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(647, L"bSv=%d, hr=0x%x, str=\"%s\"", bSaveDlg, hr, pStrTitle);
+					ReportEventLogMsgERROR_Spec_WithFormat(647, L"bSv=%d, hr=0x%x, str=\"%s\"", bSaveDlg, hr, pStrTitle);
 					ASSERT(NULL);
 				}
 			}
@@ -3199,7 +3401,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 			{
 				if (FAILED(hr = pIFileDialog->SetDefaultExtension(pStrDefaultExt)))
 				{
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(646, L"bSv=%d, hr=0x%x, ext=\"%s\"", bSaveDlg, hr, pStrDefaultExt);
+					ReportEventLogMsgERROR_Spec_WithFormat(646, L"bSv=%d, hr=0x%x, ext=\"%s\"", bSaveDlg, hr, pStrDefaultExt);
 					ASSERT(NULL);
 				}
 			}
@@ -3208,7 +3410,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 			{
 				if (FAILED(pIFileDialog->SetFileName(pStrFileName)))
 				{
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(645, L"bSv=%d, hr=0x%x, name=\"%s\"", bSaveDlg, hr, pStrFileName);
+					ReportEventLogMsgERROR_Spec_WithFormat(645, L"bSv=%d, hr=0x%x, name=\"%s\"", bSaveDlg, hr, pStrFileName);
 					ASSERT(NULL);
 				}
 			}
@@ -3220,13 +3422,13 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 				{
 					if (FAILED(hr = pIFileDialog->SetDefaultFolder(pShItm)))
 					{
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(650, L"bSv=%d, hr=0x%x, path=\"%s\"", bSaveDlg, hr, strIniDirPath.c_str());
+						ReportEventLogMsgERROR_Spec_WithFormat(650, L"bSv=%d, hr=0x%x, path=\"%s\"", bSaveDlg, hr, strIniDirPath.c_str());
 						ASSERT(NULL);
 					}
 				}
 				else
 				{
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(651, L"bSv=%d, hr=0x%x, path=\"%s\"", bSaveDlg, hr, strIniDirPath.c_str());
+					ReportEventLogMsgERROR_Spec_WithFormat(651, L"bSv=%d, hr=0x%x, path=\"%s\"", bSaveDlg, hr, strIniDirPath.c_str());
 					ASSERT(NULL);
 				}
 			}
@@ -3255,7 +3457,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 					{
 						//Error
 						bFiltersOK = FALSE;
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(634, L"bSv=%d, fltr=\"%s\"", bSaveDlg, pStrFilter);
+						ReportEventLogMsgERROR_Spec_WithFormat(634, L"bSv=%d, fltr=\"%s\"", bSaveDlg, pStrFilter);
 						ASSERT(NULL);
 						break;
 					}
@@ -3286,7 +3488,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 
 							if (FAILED(pIFileDialog->SetFileTypes((UINT)szCntCDs, pCDs)))
 							{
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(636, L"bSv=%d, sz=%Iu, fltr=\"%s\"", bSaveDlg, szCntCDs, pStrFilter);
+								ReportEventLogMsgERROR_Spec_WithFormat(636, L"bSv=%d, sz=%Iu, fltr=\"%s\"", bSaveDlg, szCntCDs, pStrFilter);
 								ASSERT(NULL);
 							}
 
@@ -3295,7 +3497,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 								UINT nIdxFlt = *pnFilterIndex;
 								if (FAILED(pIFileDialog->SetFileTypeIndex(nIdxFlt)))
 								{
-									EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(637, L"bSv=%d, i=%d", bSaveDlg, nIdxFlt);
+									ReportEventLogMsgERROR_Spec_WithFormat(637, L"bSv=%d, i=%d", bSaveDlg, nIdxFlt);
 									ASSERT(NULL);
 								}
 							}
@@ -3306,7 +3508,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 						}
 						else
 						{
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(635, L"bSv=%d, sz=%Iu", bSaveDlg, szCntCDs);
+							ReportEventLogMsgERROR_Spec_WithFormat(635, L"bSv=%d, sz=%Iu", bSaveDlg, szCntCDs);
 							ASSERT(NULL);
 						}
 					}
@@ -3397,7 +3599,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 												else
 												{
 													//Failed to get path
-													EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(656, L"bSv=%d, hr=0x%x, f=%d", bSaveDlg, hr, f);
+													ReportEventLogMsgERROR_Spec_WithFormat(656, L"bSv=%d, hr=0x%x, f=%d", bSaveDlg, hr, f);
 													ASSERT(NULL);
 
 													res = RYNE_ERROR;
@@ -3407,7 +3609,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 											else
 											{
 												//Failed to get file
-												EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(655, L"bSv=%d, hr=0x%x, f=%d", bSaveDlg, hr, f);
+												ReportEventLogMsgERROR_Spec_WithFormat(655, L"bSv=%d, hr=0x%x, f=%d", bSaveDlg, hr, f);
 												ASSERT(NULL);
 
 												res = RYNE_ERROR;
@@ -3418,21 +3620,21 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 									else
 									{
 										//Error
-										EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(654, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+										ReportEventLogMsgERROR_Spec_WithFormat(654, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 										ASSERT(NULL);
 									}
 								}
 								else
 								{
 									//Error
-									EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(653, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+									ReportEventLogMsgERROR_Spec_WithFormat(653, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 									ASSERT(NULL);
 								}
 							}
 							else
 							{
 								//Error
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(652, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+								ReportEventLogMsgERROR_Spec_WithFormat(652, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 								ASSERT(NULL);
 							}
 						}
@@ -3458,14 +3660,14 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 								else
 								{
 									//Failed
-									EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(643, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+									ReportEventLogMsgERROR_Spec_WithFormat(643, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 									ASSERT(NULL);
 								}
 							}
 							else
 							{
 								//Failed
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(642, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+								ReportEventLogMsgERROR_Spec_WithFormat(642, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 								ASSERT(NULL);
 							}
 						}
@@ -3481,7 +3683,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 					else
 					{
 						//Error
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(641, L"bSv=%d, hr=0x%x, hWnd=0x%p", bSaveDlg, hrDlg, hParentWnd);
+						ReportEventLogMsgERROR_Spec_WithFormat(641, L"bSv=%d, hr=0x%x, hWnd=0x%p", bSaveDlg, hrDlg, hParentWnd);
 						ASSERT(NULL);
 					}
 
@@ -3496,7 +3698,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 							if (FAILED(hr = pIFileDialog->GetFileTypeIndex((UINT*)pnFilterIndex)))
 							{
 								//Error
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(644, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+								ReportEventLogMsgERROR_Spec_WithFormat(644, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 								*pnFilterIndex = -1;
 								ASSERT(NULL);
 							}
@@ -3506,20 +3708,20 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 				else
 				{
 					//Error
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(640, L"bSv=%d, hr=0x%x, flags=0x%X", bSaveDlg, hr, dwAdjFlags);
+					ReportEventLogMsgERROR_Spec_WithFormat(640, L"bSv=%d, hr=0x%x, flags=0x%X", bSaveDlg, hr, dwAdjFlags);
 					ASSERT(NULL);
 				}
 			}
 			else
 			{
 				//Error
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(639, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+				ReportEventLogMsgERROR_Spec_WithFormat(639, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 				ASSERT(NULL);
 			}
 		}
 		else
 		{
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(638, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+			ReportEventLogMsgERROR_Spec_WithFormat(638, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 			ASSERT(NULL);
 		}
 
@@ -3528,7 +3730,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 	}
 	else
 	{
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(633, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
+		ReportEventLogMsgERROR_Spec_WithFormat(633, L"bSv=%d, hr=0x%x", bSaveDlg, hr);
 		ASSERT(NULL);
 	}
 
@@ -3615,7 +3817,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 				if (dwDlgRs = ::CommDlgExtendedError())
 				{
 					//Some failure
-					EVENT_LOG_REPORTS::ReportEventLogMsgWARNING_WithFormat(L"[648] bSv=%d, r=%d", bSaveDlg, dwDlgRs);
+					ReportEventLogMsgWARNING_WithFormat(L"[648] bSv=%d, r=%d", bSaveDlg, dwDlgRs);
 
 					//Older OS, try removing some flags
 					ofn.lStructSize = OPENFILENAME_SIZE_VERSION_400;
@@ -3633,7 +3835,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 						if (dwDlgRs = ::CommDlgExtendedError())
 						{
 							//Something else is wrong
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(649, L"bSv=%d, r=%d", bSaveDlg, dwDlgRs);
+							ReportEventLogMsgERROR_Spec_WithFormat(649, L"bSv=%d, r=%d", bSaveDlg, dwDlgRs);
 							ASSERT(NULL);
 						}
 						else
@@ -3683,7 +3885,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 							if (!chPathSep)
 							{
 								//Error
-								EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(658, L"bSv=%d, dir=\"%s\"", bSaveDlg, ofn.lpstrFile);
+								ReportEventLogMsgERROR_Spec_WithFormat(658, L"bSv=%d, dir=\"%s\"", bSaveDlg, ofn.lpstrFile);
 								ASSERT(NULL);
 
 								res = RYNE_ERROR;
@@ -3748,7 +3950,7 @@ RES_YES_NO_ERR CMainWnd::_open_save_dlg_func(BOOL bSaveDlg, std::wstring* pOutSt
 		else
 		{
 			//Memory fault
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(657, L"bSv=%d", bSaveDlg);
+			ReportEventLogMsgERROR_Spec_WithFormat(657, L"bSv=%d", bSaveDlg);
 			ASSERT(NULL);
 		}
 	}
@@ -3872,7 +4074,7 @@ void CMainWnd::OnMenuFileSaveConfig()
 	if (!stgs.to_CUSTOM_REG_VALUE_array(arrCRVs))
 	{
 		//Failed
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(659, L"sz=%Id", arrCRVs.size());
+		ReportEventLogMsgERROR_Spec_WithFormat(659, L"sz=%Id", arrCRVs.size());
 		ASSERT(NULL);
 
 		ShowMessageBox(L"[660] Failed to collect data.", MB_ICONERROR);
@@ -3898,7 +4100,7 @@ void CMainWnd::OnMenuFileSaveConfig()
 		{
 			//Error saving
 			int nOSError = ::GetLastError();
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(663, L"path=\"%s\"", strPath.c_str());
+			ReportEventLogMsgERROR_Spec_WithFormat(663, L"path=\"%s\"", strPath.c_str());
 
 			//Show user message
 			WCHAR buffMsg[1024];
@@ -3916,7 +4118,7 @@ void CMainWnd::OnMenuFileSaveConfig()
 	else if (rzSf != RYNE_NO)
 	{
 		//Error showing dialog box
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(661, L"r=%d", rzSf);
+		ReportEventLogMsgERROR_Spec_WithFormat(661, L"r=%d", rzSf);
 		ASSERT(NULL);
 
 		ShowMessageBox(L"[662] Failed to save data.", MB_ICONERROR);
@@ -3945,7 +4147,7 @@ void CMainWnd::OnMenuFileOpenConfig()
 	else if (rzSf != RYNE_NO)
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(665, L"r=%d", rzSf);
+		ReportEventLogMsgERROR_Spec_WithFormat(665, L"r=%d", rzSf);
 		ASSERT(NULL);
 
 		ShowMessageBox(L"[666] Failed to show open-file dialog.", MB_ICONERROR);
@@ -3984,7 +4186,7 @@ BOOL CMainWnd::LoadRegConfigFile(LPCTSTR pStrFilePath)
 		{
 			//Failed
 			nOSError = 4452;
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(669, L"path=\"%s\"", pStrFilePath);
+			ReportEventLogMsgERROR_Spec_WithFormat(669, L"path=\"%s\"", pStrFilePath);
 
 			goto lbl_content_err;
 		}
@@ -3993,7 +4195,7 @@ BOOL CMainWnd::LoadRegConfigFile(LPCTSTR pStrFilePath)
 		{
 			//Bad type
 			nOSError = 1756;
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(670, L"t=%d, path=\"%s\"", pVer->type, pStrFilePath);
+			ReportEventLogMsgERROR_Spec_WithFormat(670, L"t=%d, path=\"%s\"", pVer->type, pStrFilePath);
 
 			goto lbl_content_err;
 		}
@@ -4022,7 +4224,7 @@ BOOL CMainWnd::LoadRegConfigFile(LPCTSTR pStrFilePath)
 		{
 			//Error
 			nOSError = ::GetLastError();
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(671, L"ver=\"%s\", path=\"%s\"", pVer->strVal.c_str(), pStrFilePath);
+			ReportEventLogMsgERROR_Spec_WithFormat(671, L"ver=\"%s\", path=\"%s\"", pVer->strVal.c_str(), pStrFilePath);
 
 			goto lbl_content_err;
 		}
@@ -4047,7 +4249,7 @@ BOOL CMainWnd::LoadRegConfigFile(LPCTSTR pStrFilePath)
 			{
 				//Failed to convert
 				nOSError = ::GetLastError();
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(668, L"path=\"%s\"", pStrFilePath);
+				ReportEventLogMsgERROR_Spec_WithFormat(668, L"path=\"%s\"", pStrFilePath);
 lbl_content_err:
 				//Show user message
 				::StringCchPrintf(buff, _countof(buff),
@@ -4065,7 +4267,7 @@ lbl_content_err:
 	{
 		//Error
 		nOSError = ::GetLastError();
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(667, L"path=\"%s\"", pStrFilePath);
+		ReportEventLogMsgERROR_Spec_WithFormat(667, L"path=\"%s\"", pStrFilePath);
 
 		//Show user message
 		::StringCchPrintf(buff, _countof(buff),
@@ -4177,7 +4379,7 @@ BOOL CMainWnd::OnDragAndDrop_DropData(DRAG_ITEM_TYPE dragType, DRAG_N_DROP_REGIS
 				if (!::PostMessage(pInfo->hWndTarget, MSG_ID_DRAG_N_DROP_FILE, 0, (LPARAM)p_strFilePath))
 				{
 					//Failed
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(681, L"path=\"%s\"", p_strFilePath->c_str());
+					ReportEventLogMsgERROR_Spec_WithFormat(681, L"path=\"%s\"", p_strFilePath->c_str());
 					
 					delete p_strFilePath;
 					p_strFilePath = NULL;
@@ -4207,47 +4409,18 @@ void CMainWnd::OnDropFile(std::wstring* p_strFilePath)
 }
 
 
-BOOL CMainWnd::PowerOpNoUpdates(POWER_OP powerOp)
+BOOL CMainWnd::PowerOp(POWER_OP powerOp)
 {
-	//Initiate power operation in 'powerOp' without updates
+	//Initiate power operation in 'powerOp'
 	//RETURN:
 	//		= TRUE if success
 	//		= FALSE if error (check GetLastError() for info)
 	BOOL bRes = FALSE;
 	int nOSError = 0;
 
-	LPCTSTR pStrPowerOp = NULL;
 	DWORD dwPowerOpFlags = 0;
-	LPCTSTR pStrSubOption = L"(This tool will attempt to prevent installation of updates, if possible.)";
-
-	WCHAR buffMsg[1024];
-	WCHAR buff[1224];
-
-	switch (powerOp)
-	{
-	case PWR_OP_REBOOT:
-		pStrPowerOp = L"reboot this computer";
-		dwPowerOpFlags = SHUTDOWN_RESTART | SHUTDOWN_RESTARTAPPS;
-		break;
-
-	case PWR_OP_SHUTDOWN:
-		pStrPowerOp = L"shut down this computer";
-		dwPowerOpFlags = SHUTDOWN_POWEROFF;
-		break;
-
-	case PWR_OP_BSOD:
-		pStrPowerOp = L"\"Blue Screen\" this computer";
-		pStrSubOption = L"(IMPORTANT: Make sure to save all your data first!)";
-		break;
-
-	default:
-		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(685, L"pwr=%d", powerOp);
-		ASSERT(NULL);
-		pStrPowerOp = NULL;
-		nOSError = ERROR_EMPTY;
-		break;
-	}
+	LPCTSTR pStrSubOption;
+	LPCTSTR pStrPowerOp = translatePowerOpName(powerOp, pStrSubOption, dwPowerOpFlags);
 
 	if (pStrPowerOp)
 	{
@@ -4260,101 +4433,1054 @@ BOOL CMainWnd::PowerOpNoUpdates(POWER_OP powerOp)
 			pStrSubOption).c_str(),
 			MB_ICONWARNING | MB_YESNOCANCEL) == IDYES)
 		{
-			BOOL bResPwrOp = FALSE;
+			//Can we perform a power op now? We need to be running elevated.
+			BOOL bCanPerforNow;
 
-			//Set privilege first
-			if (AUX_FUNCS::AdjustPrivilege(SE_SHUTDOWN_NAME, TRUE, NULL))
+			if (powerOp == PWR_OP_REBOOT_WITH_UPDATES ||
+				powerOp == PWR_OP_SHUTDOWN_WITH_UPDATES)
 			{
-				if (powerOp != PWR_OP_BSOD)
+				//In this case we need to request elevation if we can't write to system registry keys to remove "no-updates" setting
+				RES_YES_NO_ERR resRWU = IsRebootWithoutUpdatesEnabled(TRUE);
+
+				bCanPerforNow = resRWU != RYNE_ERROR;
+			}
+			else
+			{
+				//Assume our ability to write into privileged system registry as an indicator
+				bCanPerforNow = gReqAdmin == RYNE_NO;
+			}
+
+			if (bCanPerforNow)
+			{
+				//Do the power operations now
+				if (!performPowerOp(powerOp))
+				{
+					//Failed
+					ReportEventLogMsgERROR_Spec_WithFormat(705, L"op=%d", powerOp);
+				}
+			}
+			else
+			{
+				//Request elevation first
+				if (_requestElevationAndRunSelf(nOSError, CMD_PARAM_POWER_OP, &powerOp, sizeof(powerOp)) == RYNE_ERROR)
+				{
+					//Show user error
+					WCHAR buffMsg[1024];
+					WCHAR buff[1224];
+
+					::StringCchPrintf(buff, _countof(buff),
+						L"Failed to prepare to %s:\n\nERROR: (0x%X) %s"
+						,
+						pStrPowerOp,
+						nOSError,
+						AUX_FUNCS::getFormattedErrorMsg(nOSError, buffMsg, _countof(buffMsg)));
+
+					ShowMessageBox(buff, MB_ICONERROR);
+				}
+			}
+		}
+	}
+	else
+	{
+		//Error
+		ReportEventLogMsgERROR_Spec_WithFormat(685, L"pwr=%d", powerOp);
+		ASSERT(NULL);
+		nOSError = ERROR_EMPTY;
+	}
+
+	::SetLastError(nOSError);
+	return bRes;
+}
+
+
+LPCTSTR CMainWnd::translatePowerOpName(POWER_OP powerOp, LPCTSTR& pStrSubOption, DWORD& dwPowerOpFlags)
+{
+	//Translate power operation in 'powerOp' into an English language string
+	//'pStrSubOption' = receives pointer to the secondary English prompt for the power op
+	//'dwPowerOpFlags' = receives flags for InitiateShutdown() API call
+	//RETURN:
+	//		= receices pointer to English string, or NULL
+
+	LPCTSTR pStrPowerOp = NULL;
+	dwPowerOpFlags = 0;
+	pStrSubOption = L"";
+
+#define TEXT_INSTALL_UPDATES L"(This tool will attempt to begin installation of Windows updates, if updates were downloaded.)"
+#define TEXT_PREVENT_UPDATES L"(This tool will attempt to prevent installation of Windows updates during the power operation.)"
+
+	switch (powerOp)
+	{
+	case PWR_OP_REBOOT_WITH_UPDATES:
+		pStrPowerOp = L"install updates (if available) and reboot";
+		pStrSubOption = TEXT_INSTALL_UPDATES;
+		dwPowerOpFlags = SHUTDOWN_RESTART | SHUTDOWN_RESTARTAPPS;
+		break;
+
+	case PWR_OP_SHUTDOWN_WITH_UPDATES:
+		pStrPowerOp = L"install updates (if available) and shut down";
+		pStrSubOption = TEXT_INSTALL_UPDATES;
+		dwPowerOpFlags = SHUTDOWN_POWEROFF | SHUTDOWN_RESTARTAPPS;
+		break;
+
+	case PWR_OP_REBOOT_NO_UPDATES:
+		pStrPowerOp = L"reboot this computer without installaing updates";
+		pStrSubOption = TEXT_PREVENT_UPDATES;
+		dwPowerOpFlags = SHUTDOWN_RESTART | SHUTDOWN_RESTARTAPPS;
+		break;
+
+	case PWR_OP_SHUTDOWN_NO_UPDATES:
+		pStrPowerOp = L"shut down this computer without installaing updates";
+		pStrSubOption = TEXT_PREVENT_UPDATES;
+		dwPowerOpFlags = SHUTDOWN_POWEROFF | SHUTDOWN_RESTARTAPPS;
+		break;
+
+	case PWR_OP_BSOD:
+		pStrPowerOp = L"\"Blue Screen\" this computer";
+		pStrSubOption = L"(IMPORTANT: Make sure to save all your data first!)";
+		break;
+
+	default:
+		//Error
+		ReportEventLogMsgERROR_Spec_WithFormat(685, L"pwr=%d", powerOp);
+		ASSERT(NULL);
+		pStrPowerOp = NULL;
+		break;
+	}
+
+	return pStrPowerOp;
+}
+
+BOOL CMainWnd::performPowerOp(POWER_OP powerOp)
+{
+	//Perform power operation from 'powerOp' without any user prompt!
+	//RETURN:
+	//		= TRUE if success
+	BOOL bResPwrOp = FALSE;
+	int nOSError = 0;
+
+	WCHAR buffMsg[1024];
+	WCHAR buff[1224];
+
+	DWORD dwPowerOpFlags = 0;
+	LPCTSTR pStrSubOption;
+	LPCTSTR pStrPowerOp = translatePowerOpName(powerOp, pStrSubOption, dwPowerOpFlags);
+
+	if (pStrPowerOp)
+	{
+		//Set privilege first
+		if (AUX_FUNCS::AdjustPrivilege(SE_SHUTDOWN_NAME, TRUE, NULL))
+		{
+			//Set special registry keys to prevent installation of updates
+
+			//	HKLM\\SOFTWARE\\Microsoft\\WindowsUpdate\\CommitStatus		DWORD: UpdateAndShutdown=1    to install updates??
+			DWORD dwR;
+			DWORD dwVal;
+			DWORD dwSetRegistryKeysError = ERROR_SUCCESS;
+
+			//Are we installing updates?
+			if (powerOp == PWR_OP_REBOOT_WITH_UPDATES ||
+				powerOp == PWR_OP_SHUTDOWN_WITH_UPDATES)
+			{
+				//We're installing updates during a power op
+
+				//	HKLM\SOFTWARE\Microsoft\WindowsUpdate\CommitStatus  DWORD: NoCommit
+				if (!DeleteValueAndEmptyKeyFromSystemRegistry(HKEY_LOCAL_MACHINE, FALSE, REG_KEY_COMMIT_STATUS, REG_VALUE_COMMIT_STATUS))
+				{
+					//Failed
+					dwSetRegistryKeysError = AUX_FUNCS::GetLastErrorNotNULL();
+					ReportEventLogMsgERROR_Spec_WithFormat0(718);
+				}
+
+				//  HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\InstallAtShutdown		DWORD: (Default)=1
+				dwVal = 1;
+				dwR = ::RegSetKeyValue(HKEY_LOCAL_MACHINE,
+					REG_KEY_INSTALL_AT_SHUTDOWN,
+					L"", REG_DWORD, &dwVal, sizeof(dwVal));
+				if (dwR != ERROR_SUCCESS)
+				{
+					//Failed
+					::SetLastError(dwR);
+					ReportEventLogMsgERROR_Spec_WithFormat0(719);
+					dwSetRegistryKeysError = dwR;
+				}
+
+			}
+			else
+			{
+				//We're preventing installation of updates during the power op
+
+				//  HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\InstallAtShutdown		DWORD: (Default)=0
+				dwVal = 0;
+				dwR = ::RegSetKeyValue(HKEY_LOCAL_MACHINE,
+					REG_KEY_INSTALL_AT_SHUTDOWN,
+					L"", REG_DWORD, &dwVal, sizeof(dwVal));
+				if (dwR != ERROR_SUCCESS)
+				{
+					//Failed
+					::SetLastError(dwR);
+					ReportEventLogMsgERROR_Spec_WithFormat0(693);
+					dwSetRegistryKeysError = dwR;
+				}
+
+				//	HKLM\SOFTWARE\Microsoft\WindowsUpdate\CommitStatus  DWORD: NoCommit=1
+				dwVal = 1;
+				dwR = ::RegSetKeyValue(HKEY_LOCAL_MACHINE,
+					REG_KEY_COMMIT_STATUS,
+					REG_VALUE_COMMIT_STATUS, REG_DWORD, &dwVal, sizeof(dwVal));
+				if (dwR != ERROR_SUCCESS)
+				{
+					//Failed
+					::SetLastError(dwR);
+					ReportEventLogMsgERROR_Spec_WithFormat0(694);
+					dwSetRegistryKeysError = dwR;
+				}
+			}
+
+
+			//See what power operation we need
+			if (powerOp != PWR_OP_BSOD)
+			{
+				//Allow only if we set registry keys (otherwise it will begin installing updates!)
+				if (dwSetRegistryKeysError == ERROR_SUCCESS)
 				{
 					//Initiate the power op
 					nOSError = ::InitiateShutdown(NULL, NULL, 0, dwPowerOpFlags, SHTDN_REASON_MAJOR_OTHER | SHTDN_REASON_MINOR_OTHER | SHTDN_REASON_FLAG_PLANNED);
 				}
 				else
 				{
-					//Implement undocumented way to BSOD this computer
-					typedef struct _UNICODE_STRING {
-						USHORT Length;
-						USHORT MaximumLength;
-						_Field_size_bytes_part_opt_(MaximumLength, Length) PWCH   Buffer;
-					} UNICODE_STRING;
-					typedef UNICODE_STRING *PUNICODE_STRING;
-
-					NTSTATUS (NTAPI *pfn_NtRaiseHardError)(
-						NTSTATUS ErrorStatus,
-						ULONG NumberOfParameters,
-						PUNICODE_STRING UnicodeStringParameterMask,
-						PVOID parameters,
-						ULONG ResponseOption,
-						PULONG Response) = NULL;
-
-					(FARPROC&)pfn_NtRaiseHardError = ::GetProcAddress(::GetModuleHandle(L"ntdll.dll"), "NtRaiseHardError");
-					if (pfn_NtRaiseHardError)
-					{
-						//Initiate "Blue Screen of Death"
-						ULONG nResponse;
-						NTSTATUS status = pfn_NtRaiseHardError(0xDEADDEAD /* MANUALLY_INITIATED_CRASH1 */, 0, NULL, NULL, 6 /* OPTION_SHUTDOWN_SYSTEM */, &nResponse);
-						if (status == 0)
-						{
-							//Success
-							nOSError = ERROR_SUCCESS;
-						}
-						else
-						{
-							//Failed
-							nOSError = RtlNtStatusToDosError(status);
-							if (nOSError == ERROR_SUCCESS)
-								nOSError = ERROR_GEN_FAILURE;
-
-							::SetLastError(nOSError);
-							EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(689, L"nResponse=0x%x", nResponse);
-						}
-					}
-					else
-					{
-						//No function
-						nOSError = AUX_FUNCS::GetLastErrorNotNULL(ERROR_INVALID_FUNCTION);
-						EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(688);
-					}
-				}
-
-				//Restore privilege back
-				if (!AUX_FUNCS::AdjustPrivilege(SE_SHUTDOWN_NAME, FALSE, NULL))
-				{
-					//Failed
-					EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(687, L"p=%d", dwPowerOpFlags);
-				}
-
-				//Check result
-				if (nOSError == ERROR_SUCCESS)
-				{
-					//Done
-					bResPwrOp = TRUE;
+					//Don't continue
+					nOSError = dwSetRegistryKeysError;
 				}
 			}
 			else
 			{
-				//Failed
-				nOSError = ::GetLastError();
-				EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(686, L"p=%d", dwPowerOpFlags);
+				//Implement undocumented way to BSOD this computer
+				typedef struct _UNICODE_STRING {
+					USHORT Length;
+					USHORT MaximumLength;
+					_Field_size_bytes_part_opt_(MaximumLength, Length) PWCH   Buffer;
+				} UNICODE_STRING;
+				typedef UNICODE_STRING *PUNICODE_STRING;
+
+				NTSTATUS(NTAPI *pfn_NtRaiseHardError)(
+					NTSTATUS ErrorStatus,
+					ULONG NumberOfParameters,
+					PUNICODE_STRING UnicodeStringParameterMask,
+					PVOID parameters,
+					ULONG ResponseOption,
+					PULONG Response) = NULL;
+
+				(FARPROC&)pfn_NtRaiseHardError = ::GetProcAddress(::GetModuleHandle(L"ntdll.dll"), "NtRaiseHardError");
+				if (pfn_NtRaiseHardError)
+				{
+					//Initiate "Blue Screen of Death"
+					ULONG nResponse;
+					NTSTATUS status = pfn_NtRaiseHardError(0xDEADDEAD /* MANUALLY_INITIATED_CRASH1 */, 0, NULL, NULL, 6 /* OPTION_SHUTDOWN_SYSTEM */, &nResponse);
+					if (status == 0)
+					{
+						//Success
+						nOSError = ERROR_SUCCESS;
+					}
+					else
+					{
+						//Failed
+						nOSError = RtlNtStatusToDosError(status);
+						if (nOSError == ERROR_SUCCESS)
+							nOSError = ERROR_GEN_FAILURE;
+
+						::SetLastError(nOSError);
+						ReportEventLogMsgERROR_Spec_WithFormat(689, L"nResponse=0x%x", nResponse);
+					}
+				}
+				else
+				{
+					//No function
+					nOSError = AUX_FUNCS::GetLastErrorNotNULL(ERROR_INVALID_FUNCTION);
+					ReportEventLogMsgERROR_Spec_WithFormat0(688);
+				}
 			}
 
-
-			if (!bResPwrOp)
+			//Restore privilege back
+			if (!AUX_FUNCS::AdjustPrivilege(SE_SHUTDOWN_NAME, FALSE, NULL))
 			{
-				//Show user error
-				::StringCchPrintf(buff, _countof(buff),
-					L"Failed to %s:\n\nERROR: (0x%X) %s"
-					,
-					pStrPowerOp,
-					nOSError,
-					AUX_FUNCS::getFormattedErrorMsg(nOSError, buffMsg, _countof(buffMsg)));
+				//Failed
+				ReportEventLogMsgERROR_Spec_WithFormat(687, L"p=%d", dwPowerOpFlags);
+			}
 
-				ShowMessageBox(buff, MB_ICONERROR);
+			//Check result
+			if (nOSError == ERROR_SUCCESS)
+			{
+				//Done
+				bResPwrOp = TRUE;
+			}
+		}
+		else
+		{
+			//Failed
+			nOSError = ::GetLastError();
+			ReportEventLogMsgERROR_Spec_WithFormat(686, L"p=%d", dwPowerOpFlags);
+		}
+	}
+	else
+	{
+		//bad power op
+		nOSError = 1292;
+		ReportEventLogMsgERROR_Spec_WithFormat(704, L"p=%d", powerOp);
+	}
+
+
+	if (!bResPwrOp)
+	{
+		//Show user error
+		::StringCchPrintf(buff, _countof(buff),
+			L"Failed to %s:\n\nERROR: (0x%X) %s"
+			,
+			pStrPowerOp,
+			nOSError,
+			AUX_FUNCS::getFormattedErrorMsg(nOSError, buffMsg, _countof(buffMsg)));
+
+		ShowMessageBox(buff, MB_ICONERROR);
+	}
+
+	::SetLastError(nOSError);
+	return bResPwrOp;
+}
+
+
+BOOL CMainWnd::GetIconSize(HICON hIcon, SIZE* pOutSz)
+{
+	//Get size of an icon in pixels
+	BOOL bRes = FALSE;
+	ICONINFO ii = { 0 };
+	if (::GetIconInfo(hIcon, &ii))
+	{
+		if (ii.fIcon)
+		{
+			BITMAP bm = { 0 };
+			if (::GetObject(ii.hbmColor, sizeof(bm), &bm))
+			{
+				bRes = TRUE;
+				if (pOutSz)
+				{
+					pOutSz->cx = bm.bmWidth;
+					pOutSz->cy = bm.bmHeight;
+				}
+			}
+		}
+
+		//Delete object
+		VERIFY(::DeleteObject(ii.hbmColor));
+		VERIFY(::DeleteObject(ii.hbmMask));
+	}
+
+	return bRes;
+}
+
+bool CMainWnd::_i2b_HasAlpha(ARGB *pargb, SIZE& sizImage, int cxRow)
+{
+	if (!pargb)
+		return false;
+
+	ULONG cxDelta = cxRow - sizImage.cx;
+	for (ULONG y = sizImage.cy; y; --y)
+	{
+		for (ULONG x = sizImage.cx; x; --x)
+		{
+			if (*pargb++ & 0xFF000000)
+			{
+				return true;
+			}
+		}
+
+		pargb += cxDelta;
+	}
+
+	return false;
+}
+
+void CMainWnd::_i2b_InitBitmapInfo(__out_bcount(cbInfo) BITMAPINFO *pbmi, ULONG cbInfo, LONG cx, LONG cy, WORD bpp)
+{
+	if (pbmi)
+	{
+		ZeroMemory(pbmi, cbInfo);
+
+		pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+		pbmi->bmiHeader.biPlanes = 1;
+		pbmi->bmiHeader.biCompression = BI_RGB;
+
+		pbmi->bmiHeader.biWidth = cx;
+		pbmi->bmiHeader.biHeight = cy;
+		pbmi->bmiHeader.biBitCount = bpp;
+	}
+}
+
+HRESULT CMainWnd::_i2b_ConvertToPARGB32(HDC hdc, ARGB *pargb, HBITMAP hbmp, SIZE& sizImage, int cxRow)
+{
+	HRESULT hr = E_INVALIDARG;
+
+	if (pargb)
+	{
+		BITMAPINFO bmi;
+		_i2b_InitBitmapInfo(&bmi, sizeof(bmi), sizImage.cx, sizImage.cy, 32);
+
+		hr = E_OUTOFMEMORY;
+		HANDLE hHeap = ::GetProcessHeap();
+		void *pvBits = ::HeapAlloc(hHeap, 0, bmi.bmiHeader.biWidth * 4 * bmi.bmiHeader.biHeight);
+		if (pvBits)
+		{
+			hr = E_UNEXPECTED;
+			if (::GetDIBits(hdc, hbmp, 0, bmi.bmiHeader.biHeight, pvBits, &bmi, DIB_RGB_COLORS) == bmi.bmiHeader.biHeight)
+			{
+				ULONG cxDelta = cxRow - bmi.bmiHeader.biWidth;
+				ARGB *pargbMask = static_cast<ARGB *>(pvBits);
+
+				for (ULONG y = bmi.bmiHeader.biHeight; y; --y)
+				{
+					for (ULONG x = bmi.bmiHeader.biWidth; x; --x)
+					{
+						if (*pargbMask++)
+						{
+							// transparent pixel
+							*pargb++ = 0;
+						}
+						else
+						{
+							// opaque pixel
+							*pargb++ |= 0xFF000000;
+						}
+					}
+
+					pargb += cxDelta;
+				}
+
+				hr = S_OK;
+			}
+
+			::HeapFree(hHeap, 0, pvBits);
+		}
+	}
+
+	return hr;
+}
+
+HRESULT CMainWnd::_i2b_ConvertBufferToPARGB32(HPAINTBUFFER hPaintBuffer, HDC hdc, HICON hicon, SIZE& sizIcon)
+{
+	HRESULT hr = E_NOTIMPL;
+
+	RGBQUAD *prgbQuad;
+	int cxRow;
+
+	hr = ::GetBufferedPaintBits(hPaintBuffer, &prgbQuad, &cxRow);
+	if (SUCCEEDED(hr))
+	{
+		ARGB *pargb = reinterpret_cast<ARGB *>(prgbQuad);
+		if (!_i2b_HasAlpha(pargb, sizIcon, cxRow))
+		{
+			ICONINFO info;
+			if (::GetIconInfo(hicon, &info))
+			{
+				if (info.hbmMask)
+				{
+					hr = _i2b_ConvertToPARGB32(hdc, pargb, info.hbmMask, sizIcon, cxRow);
+				}
+
+				if (info.hbmColor)
+					VERIFY(::DeleteObject(info.hbmColor));
+
+				if (info.hbmMask)
+					VERIFY(::DeleteObject(info.hbmMask));
 			}
 		}
 	}
 
-	::SetLastError(nOSError);
+	return hr;
+}
+
+HRESULT CMainWnd::_i2b_Create32BitHBITMAP(HDC hdc, const SIZE *psize, void **ppvBits, HBITMAP* phBmp)
+{
+	HRESULT hr = E_INVALIDARG;
+
+	if (psize &&
+		phBmp)
+	{
+		*phBmp = NULL;
+
+		BITMAPINFO bmi;
+		_i2b_InitBitmapInfo(&bmi, sizeof(bmi), psize->cx, psize->cy, 32);
+
+		HDC hdcUsed = hdc ? hdc : ::GetDC(NULL);
+		if (hdcUsed)
+		{
+			*phBmp = ::CreateDIBSection(hdcUsed, &bmi, DIB_RGB_COLORS, ppvBits, NULL, 0);
+			if (hdc != hdcUsed)
+			{
+				::ReleaseDC(NULL, hdcUsed);
+			}
+		}
+
+		hr = (NULL == *phBmp) ? E_OUTOFMEMORY : S_OK;
+	}
+
+	return hr;
+}
+
+
+HBITMAP CMainWnd::IconToBitmapPARGB32(HICON hIcon)
+{
+	//Convert a icon to an alpha-channel aware bitmap
+	//'hIcon' = icon to convert
+	//RETURN:
+	//		= Bitmap handle (must be removed with ::DeleteObject!)
+	//		= NULL if error
+	HRESULT hr = E_OUTOFMEMORY;
+	HBITMAP hBmp = NULL;
+
+	SIZE sizIcon;
+	if (hIcon &&
+		GetIconSize(hIcon, &sizIcon))
+	{
+		RECT rcIcon = { 0, 0, sizIcon.cx, sizIcon.cy };
+
+		HDC hdcDest = ::CreateCompatibleDC(NULL);
+		if (hdcDest)
+		{
+			hr = _i2b_Create32BitHBITMAP(hdcDest, &sizIcon, NULL, &hBmp);
+			if (SUCCEEDED(hr))
+			{
+				hr = E_FAIL;
+
+				HBITMAP hbmpOld = (HBITMAP)::SelectObject(hdcDest, hBmp);
+				if (hbmpOld)
+				{
+					BLENDFUNCTION bfAlpha = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+
+					BP_PAINTPARAMS paintParams = { 0 };
+					paintParams.cbSize = sizeof(paintParams);
+					paintParams.dwFlags = BPPF_ERASE;
+					paintParams.pBlendFunction = &bfAlpha;
+
+					HDC hdcBuffer;
+					HPAINTBUFFER hPaintBuffer = ::BeginBufferedPaint(hdcDest, &rcIcon, BPBF_DIB, &paintParams, &hdcBuffer);
+					if (hPaintBuffer)
+					{
+						if (::DrawIconEx(hdcBuffer, 0, 0, hIcon, sizIcon.cx, sizIcon.cy, 0, NULL, DI_NORMAL))
+						{
+							// If icon did not have an alpha channel, we need to convert buffer to PARGB.
+							hr = _i2b_ConvertBufferToPARGB32(hPaintBuffer, hdcDest, hIcon, sizIcon);
+						}
+
+						// This will write the buffer contents to the destination bitmap.
+						::EndBufferedPaint(hPaintBuffer, TRUE);
+					}
+
+					::SelectObject(hdcDest, hbmpOld);
+				}
+			}
+
+			VERIFY(::DeleteDC(hdcDest));
+		}
+
+		VERIFY(::DestroyIcon(hIcon));
+
+		if (FAILED(hr))
+		{
+			if (hBmp)
+			{
+				VERIFY(::DeleteObject(hBmp));
+				hBmp = NULL;
+			}
+		}
+	}
+
+	return hBmp;
+}
+
+
+void CMainWnd::ReloadResources()
+{
+	//Call this function once during initialization, or if DPI and other screen changes take place
+
+
+	//Load icons (as shared so that we don't have to delete them)
+	HANDLE hIconLg = ::LoadImage(this->_ghInstance, MAKEINTRESOURCE(IDI_MAIN_ICON), IMAGE_ICON, 
+		AUX_FUNCS::GetSystemMetricsWithDPI(SM_CXICON, hDlg), AUX_FUNCS::GetSystemMetricsWithDPI(SM_CYICON, hDlg), LR_SHARED);
+	ASSERT(hIconLg);
+	HANDLE hIconSm = ::LoadImage(this->_ghInstance, MAKEINTRESOURCE(IDI_MAIN_ICON), IMAGE_ICON, 
+		AUX_FUNCS::GetSystemMetricsWithDPI(SM_CXSMICON, hDlg), AUX_FUNCS::GetSystemMetricsWithDPI(SM_CYSMICON, hDlg), LR_SHARED);
+	ASSERT(hIconSm);
+
+	//Set window icons
+	::SendMessage(hDlg, WM_SETICON, ICON_BIG, (LPARAM)hIconLg);
+	::SendMessage(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIconSm);
+
+
+	//Get current DPI
+	double fDpiX;
+	if (!AUX_FUNCS::GetDPI(hDlg, &fDpiX))
+	{
+		//Failed
+		ReportEventLogMsgERROR_Spec_WithFormat(711, L"x=%f", fDpiX);
+		ASSERT(NULL);
+	}
+
+	//Remove old icon
+	if (_hIconLogo)
+	{
+		VERIFY(::DestroyIcon(_hIconLogo));
+		_hIconLogo = NULL;
+	}
+
+	//Load logo icon
+	ASSERT(!_hIconLogo);
+	_gszMainIconLogo.cx = (int)(MAIN_LOGO_ICON_WIDTH * fDpiX);
+	_gszMainIconLogo.cy = (int)(MAIN_LOGO_ICON_HEIGHT * fDpiX);
+	HRESULT hr = ::LoadIconWithScaleDown(this->_ghInstance, MAKEINTRESOURCE(IDI_MAIN_ICON), _gszMainIconLogo.cx, _gszMainIconLogo.cy, &_hIconLogo);
+	ASSERT(_hIconLogo);
+	if (hr != S_OK)
+	{
+		//Error
+		ReportEventLogMsgERROR_Spec_WithFormat(509, L"dpi=%f, w=%d, h=%d", fDpiX, _gszMainIconLogo.cx, _gszMainIconLogo.cy);
+		ASSERT(NULL);
+	}
+
+	//Redraw that part of the window to redraw our logo icon
+	RECT rcLogo;
+	VERIFY(GetLogoIconRect(rcLogo));
+	VERIFY(::InvalidateRect(hDlg, &rcLogo, TRUE));
+
+
+	//Load UAC shield icon
+	int nIcnCx = AUX_FUNCS::GetSystemMetricsWithDPI(SM_CXMENUCHECK, hDlg);
+	int nIcnCy = AUX_FUNCS::GetSystemMetricsWithDPI(SM_CYMENUCHECK, hDlg);
+	HICON hIcnShield = NULL;
+
+	hr = ::LoadIconWithScaleDown(NULL, IDI_SHIELD, nIcnCx, nIcnCy, &hIcnShield);		//No need to destroy 'hIcnShield' as it's a shared resource!
+	if (SUCCEEDED(hr))
+	{
+		//Delete old
+		if (_ghBmpUAC)
+		{
+			VERIFY(::DeleteObject(_ghBmpUAC));
+			_ghBmpUAC = NULL;
+		}
+
+		//Create new
+		_ghBmpUAC = IconToBitmapPARGB32(hIcnShield);
+	}
+	else
+	{
+		//Failed
+		ReportEventLogMsgERROR_Spec_WithFormat(709, L"cx=%d, cy=%d", nIcnCx, nIcnCy);
+		ASSERT(NULL);
+	}
+
+
+
+	//See if we need to add UAC shield to the menu items
+	HMENU hMenu = ::GetMenu(hDlg);
+	ASSERT(hMenu);
+
+	MENUITEMINFO mii = { };
+	mii.cbSize = sizeof(mii);
+	mii.fMask = MIIM_BITMAP;
+	ASSERT(_ghBmpUAC);
+	mii.hbmpItem = gReqAdmin != RYNE_NO ? _ghBmpUAC : NULL;
+
+	static UINT uMenuIdsAddUAC[] = {
+		ID_OPTIONS_REBOOT_WITHOUT_UPDATES,
+		ID_OPTIONS_SHUTDOWN_WITHOUT_UPDATES,
+		ID_OPTIONS_FORCE_BSOD,
+	};
+
+	for (int i = 0; i < _countof(uMenuIdsAddUAC); i++)
+	{
+		VERIFY(::SetMenuItemInfo(hMenu, uMenuIdsAddUAC[i], FALSE, &mii));
+	}
+
+
+	//See if we have set up to reboot without updates
+	//		RYNE_YES	= if it is enabled
+	//		RYNE_NO		= if not enabled
+	//		RYNE_ERROR	= if error (check GetLastError() for info) - may be ERROR_ACCESS_DENIED if setting is inaccessible because of low privileges
+	RES_YES_NO_ERR resRWU = CMainWnd::IsRebootWithoutUpdatesEnabled(TRUE);
+	if (resRWU == RYNE_ERROR)
+	{
+		if (::GetLastError() != ERROR_ACCESS_DENIED)
+		{
+			//Some error determining
+			ReportEventLogMsgERROR_Spec_WithFormat0(717);
+			ASSERT(NULL);
+		}
+
+		//Need UAC prompt
+		mii.hbmpItem = _ghBmpUAC;
+	}
+	else
+	{
+		//No need UAC prompt
+		mii.hbmpItem = NULL;
+	}
+
+	static UINT uMenu2IdsAddUAC[] = {
+		ID_OPTIONS_REBOOT_AND_INSTALL_UPDATES,
+		ID_OPTIONS_SHUTDOWN_AND_INSTALL_UPDATES,
+	};
+
+	for (int i = 0; i < _countof(uMenu2IdsAddUAC); i++)
+	{
+		VERIFY(::SetMenuItemInfo(hMenu, uMenu2IdsAddUAC[i], FALSE, &mii));
+	}
+
+
+}
+
+
+RES_YES_NO_ERR CMainWnd::IsRebootWithoutUpdatesEnabled(BOOL bCheckWritable)
+{
+	//Checks if reboot without installation of updates is enabled in registry
+	//'bCheckWritable' = TRUE to check if this process can change it (if it's enabled)
+	//RETURN:
+	//		RYNE_YES	= if it is enabled
+	//		RYNE_NO		= if not enabled
+	//		RYNE_ERROR	= if error (check GetLastError() for info) - may be ERROR_ACCESS_DENIED if setting is inaccessible because of low privileges
+	RES_YES_NO_ERR res = RYNE_ERROR;
+	HKEY hKey;
+	DWORD dwR;
+
+	//See if the key with the value exists (open for read access)
+	dwR = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_KEY_COMMIT_STATUS, 0, KEY_QUERY_VALUE, &hKey);
+	if (dwR == ERROR_SUCCESS)
+	{
+		//Get needed value
+		dwR = ::RegQueryValueEx(hKey, REG_VALUE_COMMIT_STATUS, NULL, NULL, NULL, NULL);
+		if (dwR == ERROR_SUCCESS)
+		{
+			//Do we need to check if it's writable?
+			if (bCheckWritable)
+			{
+				//Open it for writing
+				::RegCloseKey(hKey);
+				hKey = NULL;
+
+				dwR = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_KEY_COMMIT_STATUS, 0, KEY_SET_VALUE, &hKey);
+				if (dwR == ERROR_SUCCESS)
+				{
+					//Value is writable
+					res = RYNE_YES;
+				}
+				else if (dwR == ERROR_FILE_NOT_FOUND)
+				{
+					//Weird!? But OK. Must have been a race condition
+					res = RYNE_NO;
+				}
+			}
+			else
+			{
+				//It exists (that's all we need to know)
+				res = RYNE_YES;
+			}
+		}
+		else if (dwR == ERROR_FILE_NOT_FOUND)
+		{
+			res = RYNE_NO;
+		}
+
+		//Close the key
+		if (hKey)
+		{
+			::RegCloseKey(hKey);
+			hKey = NULL;
+		}
+	}
+	else if (dwR == ERROR_FILE_NOT_FOUND)
+	{
+		res = RYNE_NO;
+	}
+
+
+	//Check the other key if enabled so far
+	if (res == RYNE_YES)
+	{
+		//Checke presence of another value
+		dwR = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_KEY_INSTALL_AT_SHUTDOWN, 0, KEY_QUERY_VALUE, &hKey);
+		if (dwR == ERROR_SUCCESS)
+		{
+			//Get needed value
+			DWORD dwType;
+			dwR = ::RegQueryValueEx(hKey, NULL, NULL, &dwType, NULL, NULL);
+			if (dwR == ERROR_SUCCESS)
+			{
+				//Do we need to check if it's writable?
+				if (bCheckWritable)
+				{
+					//It must be the right type
+					if (dwType == REG_DWORD)
+					{
+						//See if we can open it for writing
+						::RegCloseKey(hKey);
+						hKey = NULL;
+
+						dwR = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_KEY_INSTALL_AT_SHUTDOWN, 0, KEY_SET_VALUE, &hKey);
+						if (dwR == ERROR_SUCCESS)
+						{
+							//All good
+						}
+						else if (dwR != ERROR_FILE_NOT_FOUND)
+						{
+							//Can't open it
+							res = RYNE_ERROR;
+						}
+					}
+				}
+			}
+			else if (dwR != ERROR_FILE_NOT_FOUND)
+			{
+				//Some error
+				ASSERT(NULL);
+				res = RYNE_ERROR;
+			}
+
+
+			//Close the key
+			if (hKey)
+			{
+				::RegCloseKey(hKey);
+				hKey = NULL;
+			}
+		}
+		else if (dwR != ERROR_FILE_NOT_FOUND)
+		{
+			//Error
+			ASSERT(NULL);
+			res = RYNE_ERROR;
+		}
+	}
+
+	::SetLastError(dwR);
+	return res;
+}
+
+
+BOOL CMainWnd::DeleteValueAndEmptyKeyFromSystemRegistry(HKEY hIniKey, BOOL bWOW64, LPCTSTR lpSubKey, LPCTSTR lpKeyValue)
+{
+	//Delete 'lpSubKey' value from the 'lpKeyValue' and then 'lpSubKey' itself if its empty
+	//'hIniKey' = Initial key. Can be also: HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER, etc.
+	//'bWOW64' = TRUE if 'lpSubKey' is a redirected WOW64 key under x86 build
+	//RETURN:
+	//		= TRUE if done
+	//		= FALSE if error (check GetLastError() for info)
+	HKEY hKey;
+	DWORD dwR;
+	BOOL bRes = FALSE;
+	REGSAM dwSam;
+
+#ifdef _M_X64
+	//64-bit
+	dwSam = KEY_SET_VALUE | KEY_QUERY_VALUE;
+#else
+	//32-bit
+	dwSam = KEY_SET_VALUE | KEY_QUERY_VALUE | (bWOW64 ? KEY_WOW64_64KEY : 0);
+#endif
+
+	//Open such key first
+	dwR = RegOpenKeyEx(hIniKey, lpSubKey, 0, dwSam, &hKey);
+	if (dwR == ERROR_SUCCESS)
+	{
+		//Delete our value
+		dwR = RegDeleteValue(hKey, lpKeyValue);
+		if (dwR == ERROR_SUCCESS ||
+			dwR == ERROR_FILE_NOT_FOUND)
+		{
+			//Success so far
+			bRes = TRUE;
+		}
+
+		BOOL bCanDeleteKey = FALSE;
+
+		//See if there are any values or subkeys left in that key
+		DWORD dwCntSubkeys, dwCntVals;
+		DWORD dwR2 = RegQueryInfoKey(hKey, NULL, NULL, NULL, &dwCntSubkeys, NULL, NULL, &dwCntVals, NULL, NULL, NULL, NULL);
+		if (dwR2 == ERROR_SUCCESS)
+		{
+			//Can delete this key only if it has no values and no subkeys
+			if (dwCntVals == 0 &&
+				dwCntSubkeys == 0)
+			{
+				bCanDeleteKey = TRUE;
+			}
+		}
+		else
+		{
+			//Error
+			if (bRes)
+			{
+				dwR = dwR2;
+				bRes = FALSE;
+			}
+		}
+
+		//Close key
+		RegCloseKey(hKey);
+
+		if (bCanDeleteKey)
+		{
+			//Can delete this subkey now
+			dwR2 = RegDeleteKeyEx(hIniKey, lpSubKey,
+#ifdef _M_X64
+				//64-bit
+				0,
+#else
+				//32-bit
+				(bWOW64 ? KEY_WOW64_64KEY : 0),
+#endif
+				NULL);
+
+			if (dwR2 != ERROR_SUCCESS)
+			{
+				//Error
+				dwR = dwR2;
+				bRes = FALSE;
+				ASSERT(NULL);
+			}
+		}
+	}
+	else if (dwR == ERROR_FILE_NOT_FOUND)
+	{
+		//No such key - then success, as there's nothing to delete
+		bRes = TRUE;
+	}
+
+	::SetLastError(dwR);
 	return bRes;
 }
+
+
+
+//BOOL CMainWnd::SetRegKeyValueWithDACL(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValueName, DWORD dwType, LPCVOID lpData, DWORD cbData, int* pnOutSpecErr)
+//{
+//	//Set value in the registry key, while temporarily allowing a write-access via the key's DACL
+//	//'hKey' = main key. Use HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER, etc.
+//	//'lpSubKey' = key to use (the DACL will be applied to it)
+//	//'lpValueName' = value name, or L"" or NULL for default value
+//	//'dwType' = type of value to set: REG_DWORD, REG_SZ, etc.
+//	//'lpData' = pointer to data for the value to set
+//	//'cbData' = size of data to set from 'lpData' in BYTEs. If 'dwType' == REG_SZ or other string, this must include last NULL
+//	//'pnOutSpecErr' = if not NULL, will receive spec error code, if any
+//	//RETURN:
+//	//		= TRUE if success
+//	//		= FALSE if error (check GetLastError() for info)
+//	BOOL bRes = FALSE;
+//	int nOSError = 0;
+//	int nSpecErr = 0;
+//
+//#define REG_K_SAM_NEEDED (KEY_SET_VALUE /*| KEY_CREATE_SUB_KEY | KEY_QUERY_VALUE*/)
+//
+//	//Try to create the key first
+//	HKEY hKeyM = NULL;
+//	HKEY hKeyDACL = NULL;
+//
+//	DWORD dwR = ::RegCreateKeyEx(hKey, lpSubKey, NULL, NULL, 0, REG_K_SAM_NEEDED | WRITE_DAC, NULL, &hKeyM, NULL);
+//	if (dwR == ERROR_SUCCESS)
+//	{
+//		//Opened key OK
+//	}
+//	else if (dwR == ERROR_ACCESS_DENIED)
+//	{
+//		//Try to open the key
+//		dwR = ::RegOpenKeyEx(hKey, lpSubKey, 0, READ_CONTROL | WRITE_DAC, &hKeyDACL);
+//	}
+//	else
+//	{
+//		//Some other error
+//		nOSError = dwR;
+//		nSpecErr = 696;
+//	}
+//
+//
+//	PSECURITY_DESCRIPTOR pOldSD = NULL;
+//
+//	//See if we need to set the DACL
+//	if (hKeyDACL)
+//	{
+//		//Create DACL for access to everyone (including processes with untrusted DACL)
+//		SECURITY_DESCRIPTOR_W_LABEL sd4e;
+//		if (AUX_FUNCS::get_SECURITY_DESCRIPTOR_FullAccess(sd4e))
+//		{
+//			//Get DACL from the key
+//			dwR = ::GetSecurityInfo(hKeyDACL, SE_REGISTRY_KEY, DACL_SECURITY_INFORMATION, NULL, NULL, NULL, NULL, &pOldSD);
+//			if (dwR == ERROR_SUCCESS)
+//			{
+//				//Set new DACL back to the key
+//				if (::SetKernelObjectSecurity(hKeyDACL, DACL_SECURITY_INFORMATION, &sd4e.sd))
+//				{
+//					//Try to open the key now
+//					dwR = ::RegOpenKeyEx(hKey, lpSubKey, 0, REG_K_SAM_NEEDED, &hKeyM);
+//					if (dwR != ERROR_SUCCESS)
+//					{
+//						//Error
+//						nOSError = dwR;
+//						nSpecErr = 701;
+//					}
+//				}
+//				else
+//				{
+//					//Failed
+//					nOSError = ::GetLastError();
+//					nSpecErr = 700;
+//				}
+//			}
+//			else
+//			{
+//				//Failed
+//				nOSError = dwR;
+//				nSpecErr = 697;
+//			}
+//		}
+//		else
+//		{
+//			//Failed
+//			nOSError = ::GetLastError();
+//			nSpecErr = 699;
+//		}
+//
+//	}
+//
+//
+//	//Did we get the key?
+//	if (hKeyM)
+//	{
+//		//Set value on it
+//		dwR = ::RegSetValueEx(hKeyM, lpValueName, NULL, dwType, (const BYTE *)lpData, cbData);
+//		if (dwR == ERROR_SUCCESS)
+//		{
+//			//Done
+//			bRes = TRUE;
+//		}
+//		else
+//			nOSError = dwR;
+//
+//		//Close key
+//		::RegCloseKey(hKeyM);
+//		hKeyM = NULL;
+//	}
+//
+//
+//	//Free mem
+//	if (pOldSD)
+//	{
+//		::LocalFree(pOldSD);
+//		pOldSD = NULL;
+//	}
+//
+//	if (hKeyDACL)
+//	{
+//		::RegCloseKey(hKeyDACL);
+//		hKeyDACL = NULL;
+//	}
+//
+//	if (pnOutSpecErr)
+//		*pnOutSpecErr = nSpecErr;
+//
+//	::SetLastError(nOSError);
+//	return bRes;
+//}

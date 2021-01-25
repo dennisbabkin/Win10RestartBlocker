@@ -42,6 +42,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(lpCmdLine);
 
 
+
 	//Check if this is Windows 10
 	RTL_OSVERSIONINFOEXW ver;
 	if(AUX_FUNCS::CheckWindowsVersion(&ver))
@@ -49,7 +50,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		if(ver.dwMajorVersion < 10)
 		{
 			//Can't start on a non-Windows 10 version of the OS
-			EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(511, L"Bad Windows version: %d.%d.%d", ver.dwMajorVersion, ver.dwMinorVersion, ver.dwBuildNumber);
+			ReportEventLogMsgERROR_Spec_WithFormat(511, L"Bad Windows version: %d.%d.%d", ver.dwMajorVersion, ver.dwMinorVersion, ver.dwBuildNumber);
 			ASSERT(NULL);
 
 			return -2;
@@ -58,7 +59,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	else
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(510);
+		ReportEventLogMsgERROR_Spec_WithFormat0(510);
 		ASSERT(NULL);
 	}
 
@@ -71,7 +72,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	if (res64bit == RYNE_ERROR)
 	{
 		//Error
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(601, L"Unknown bitness");
+		ReportEventLogMsgERROR_Spec_WithFormat(601, L"Unknown bitness");
 		ASSERT(NULL);
 
 		return -3;
@@ -80,7 +81,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	else if (res64bit != RYNE_YES)
 	{
 		//OS must be 64-bit
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(602, L"Incorrect bitness");
+		ReportEventLogMsgERROR_Spec_WithFormat(602, L"Incorrect bitness");
 		ASSERT(NULL);
 
 		return -3;
@@ -90,7 +91,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	{
 #ifndef _DEBUG
 		//OS must be 32-bit
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(603, L"Incorrect bitness");
+		ReportEventLogMsgERROR_Spec_WithFormat(603, L"Incorrect bitness");
 		ASSERT(NULL);
 
 		return -3;
@@ -102,10 +103,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	//Show main window
 	CMainWnd mainWnd(hInstance);
 	CMD_LINE_PARSE_RESULTS clpr = mainWnd.ParseCommandLine();
-	if(!mainWnd.CreateMainWnd((clpr & CLPR_AUTO_SAVE_ELEVATED) ? FALSE : TRUE))
+	if(!mainWnd.CreateMainWnd((clpr & (CLPR_AUTO_SAVE_ELEVATED | CLPR_AUTO_POWER_OP_ELEVATED)) ? FALSE : TRUE))
 	{
 		//Failed to show window
-		EVENT_LOG_REPORTS::ReportEventLogMsgERROR_Spec_WithFormat(503, L"CRITICAL: Failed to open main window");
+		ReportEventLogMsgERROR_Spec_WithFormat(503, L"CRITICAL: Failed to open main window");
 		ASSERT(NULL);
 		::MessageBeep(MB_ICONERROR);
 	}

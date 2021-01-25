@@ -41,7 +41,7 @@ CDropTarget32::~CDropTarget32()
 	//Destructor
 
 	//Make sure that the user released the drag-and-drop objects!
-	assert(!_pDnDReg);		//Make sure to call
+	assert(!_pDnDReg);		//Make sure to call UnregisterFromDragAndDrop()!
 
 	if (_bComInitted)
 	{
@@ -96,7 +96,7 @@ HRESULT __stdcall CDropTarget32::DragEnter(IDataObject* pDataObject, DWORD grfKe
 
 	if (_allowedDropType != DIT_UNKNOWN)
 	{
-		// get the dropeffect based on keyboard state
+		//Get the dropeffect based on keyboard state
 		*pdwEffect = dropEffect(grfKeyState, pt, *pdwEffect);
 
 		//Ask caller to process it

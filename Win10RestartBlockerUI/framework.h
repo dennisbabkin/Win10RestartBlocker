@@ -32,6 +32,9 @@
 #include <tlhelp32.h>
 #include <atlbase.h>
 
+#include <uxtheme.h>
+#pragma comment(lib, "UxTheme.lib")
+#include <GdiPlusPixelFormats.h>
 
 #include "Types.h"			//Custom types
 

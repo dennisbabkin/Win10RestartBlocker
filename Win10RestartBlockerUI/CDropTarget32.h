@@ -20,7 +20,7 @@
 //
 
 
-//Class that implements drag-and-drop pperations for a window
+//Class that implements drag-and-drop operations for a window
 #pragma once
 
 #include <oleidl.h>
@@ -40,7 +40,7 @@ enum DRAG_N_DROP_FLAGS {
 enum DRAG_N_DROP_WND_TYPE {
 	DND_WND_T_Unknown,
 
-	DND_WND_T_GENERIC,				//Genetic window for drag-and-drop
+	DND_WND_T_GENERIC,				//Generic window for drag-and-drop
 };
 
 struct DRAG_N_DROP_REGISTER {
@@ -125,7 +125,7 @@ private:
 	BOOL _bComInitted;
 
 	DRAG_N_DROP_FLAGS _flags;
-	DRAG_N_DROP_REGISTER* _pDnDReg;			//NULL if not registered yes. Otherwise drop-target info
+	DRAG_N_DROP_REGISTER* _pDnDReg;			//NULL if not registered yet. Otherwise drop-target info
 	DRAG_ITEM_TYPE _allowedDropType;		//Type of allowed drop, or DIT_UNKNOWN if not allowed
 
 

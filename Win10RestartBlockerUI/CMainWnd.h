@@ -54,16 +54,19 @@ private:
 	HANDLE _hThreadEventMon;	//Thread that monitors special events (it runs for as long as this GUI app is running)
 	HANDLE _hEventStop;			//[Manual] event that will be set when this GUI app is closing
 	APP_SETTINGS g_settings;	//Cached settings
-	RES_YES_NO_ERR gReqAdmin;	//Check if elevation is required to save changes
-	SAVED_DATA g_CmdSvData;		//Data for saving passed via command line call
-	std::wstring gstrOpenCfgFilePath;		//Config file path passed into our file via command line
-	HMONITOR _ghCmdMonitor;		//Monitor handle to show our window (when invoked from a command line)
+	RES_YES_NO_ERR gReqAdmin;	//Check if elevation is required to access privileged resources
+	SAVED_DATA g_CmdSvData;		//Data for saving, passed via command line call
+	POWER_OP g_CmdSvPowerOp;	//Power operation, passed via command line call
+	std::wstring gstrOpenCfgFilePath;		//Config file path passed into our app via command line
+	HMONITOR _ghCmdMonitor;		//Monitor handle to show our window in (when invoked from a command line)
 	BOOL _gbPostInitDlgDone;	//TRUE if post-init-dialog message was dispatched
 	HACCEL _hAccelMain;			//Main window accelerators
+	HBITMAP _ghBmpUAC;			//UAC shield bitmap
 	INT_PTR DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam);
 	BOOL OnInitDialog(HWND hWndDefaultFocus);
 	void OnPostInitDialog();
 	BOOL OnFinalMessage();
+	BOOL GetLogoIconRect(RECT & rcOut);
 	void OnPaint(HDC hDC, PAINTSTRUCT& ps);
 	BOOL ChangeClassNameForDlgWnd(LPCTSTR pStrNewClassName);
 	BOOL _unregisterCurrentWndClass();
@@ -120,6 +123,12 @@ private:
 	static BOOL SaveRegConfigFileContents(LPCTSTR pStrFilePath, std::vector<CUSTOM_REG_VALUE>& arrData);
 	void OnMenuFileSaveConfig();
 private:
+	RES_YES_NO_ERR _requestElevationAndRunSelf(int & nOSError, LPCTSTR pStrCmdRun, const void* pValue, size_t szcbValue, DWORD dwmsTimeout = (3 * 1000));
+	static HRESULT _i2b_ConvertBufferToPARGB32(HPAINTBUFFER hPaintBuffer, HDC hdc, HICON hicon, SIZE & sizIcon);
+	static HRESULT _i2b_Create32BitHBITMAP(HDC hdc, const SIZE * psize, void ** ppvBits, HBITMAP * phBmp);
+	static bool _i2b_HasAlpha(ARGB * pargb, SIZE & sizImage, int cxRow);
+	static void _i2b_InitBitmapInfo(BITMAPINFO * pbmi, ULONG cbInfo, LONG cx, LONG cy, WORD bpp);
+	static HRESULT _i2b_ConvertToPARGB32(HDC hdc, ARGB * pargb, HBITMAP hbmp, SIZE & sizImage, int cxRow);
 	BOOL OnDragAndDrop_IsAllowed(DRAG_ITEM_TYPE dragType, DRAG_N_DROP_REGISTER* pInfo);
 	void OnDragAndDrop_Began(DRAG_ITEM_TYPE dragType, DRAG_N_DROP_REGISTER* pInfo, BOOL* pbSetFocus, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect);
 	void OnDragAndDrop_Pending(DRAG_ITEM_TYPE dragType, DRAG_N_DROP_REGISTER* pInfo, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect);
@@ -129,6 +138,14 @@ private:
 	void OnMenuFileOpenConfig();
 	BOOL LoadRegConfigFile(LPCTSTR pStrFilePath);
 	void OnDropFile(std::wstring* p_strFilePath);
-	BOOL PowerOpNoUpdates(POWER_OP powerOp);
+	BOOL PowerOp(POWER_OP powerOp);
+	static LPCTSTR translatePowerOpName(POWER_OP powerOp, LPCTSTR& pStrSubOption, DWORD& dwPowerOpFlags);
+	BOOL performPowerOp(POWER_OP powerOp);
+	static BOOL GetIconSize(HICON hIcon, SIZE * pOutSz = NULL);
+	static HBITMAP IconToBitmapPARGB32(HICON hIcon);
+	void ReloadResources();
+	static RES_YES_NO_ERR IsRebootWithoutUpdatesEnabled(BOOL bCheckWritable = TRUE);
+	static BOOL DeleteValueAndEmptyKeyFromSystemRegistry(HKEY hIniKey, BOOL bWOW64, LPCTSTR lpSubKey, LPCTSTR lpKeyValue);
+//	static BOOL SetRegKeyValueWithDACL(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValueName, DWORD dwType, LPCVOID lpData, DWORD cbData, int* pnOutSpecErr = NULL);
 };
 

@@ -27,6 +27,7 @@
 #define TSIZEOF(f) (_countof(f) - 1)
 
 
+//Custom window messages:
 enum MSG_ID{
 	MSG_ID_POST_INIT_DIALOG = (WM_APP + 1),
 	MSG_ID_DRAG_N_DROP_FILE,
@@ -42,7 +43,8 @@ enum SAVE_OP{
 };
 
 
-#define CMD_PARAM_RUN L"r"
+#define CMD_PARAM_RUN L"r"			// Command EventName MonitorHandle CommandValue
+#define CMD_PARAM_POWER_OP L"p"
 
 struct SAVED_DATA{
 	SAVE_OP saveOp;				//How data was saved
@@ -205,7 +207,8 @@ private:
 enum CMD_LINE_PARSE_RESULTS{
 	CLPR_None = 0,
 
-	CLPR_AUTO_SAVE_ELEVATED = 0x1,		//Set when our app was started elevated from within
+	CLPR_AUTO_SAVE_ELEVATED = 0x1,			//Set when our app was started elevated to save changes
+	CLPR_AUTO_POWER_OP_ELEVATED = 0x2,		//Set when our app was started elevated to perform a power operation
 };
 
 
@@ -241,10 +244,15 @@ private:
 
 
 enum POWER_OP {
-	PWR_OP_REBOOT,
-	PWR_OP_SHUTDOWN,
+	PWR_OP_None,
+
+	PWR_OP_REBOOT_WITH_UPDATES,
+	PWR_OP_SHUTDOWN_WITH_UPDATES,
+	PWR_OP_REBOOT_NO_UPDATES,
+	PWR_OP_SHUTDOWN_NO_UPDATES,
 	PWR_OP_BSOD,
 
+	PWR_OP_Last				//Must be last!
 };
 
 
@@ -258,4 +266,10 @@ RtlNtStatusToDosError(
 	_In_ LONG Status
 );
 
+
+
+#define REG_KEY_INSTALL_AT_SHUTDOWN L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Orchestrator\\InstallAtShutdown"
+
+#define REG_KEY_COMMIT_STATUS L"SOFTWARE\\Microsoft\\WindowsUpdate\\CommitStatus"
+#define REG_VALUE_COMMIT_STATUS L"NoCommit"
 

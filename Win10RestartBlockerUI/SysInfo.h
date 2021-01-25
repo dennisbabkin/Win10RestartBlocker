@@ -220,8 +220,6 @@ static void __AppendFormat(std::wstring& s, LPCTSTR pszFormat, ...)
 	va_list argList;
 	va_start( argList, pszFormat );
 	
-	//s.FormatV(pszFormat, argList);
-
 	//Get length
 	int nLnBuff = _vscwprintf(pszFormat, argList);
 
@@ -588,7 +586,7 @@ static LPCTSTR PathSkipRoot_CorrectedForMicrosoftStupidity(LPCTSTR pszPath)
 	size_t nLn = lstrlen(pszPath);
 	
 	//Convert to a new buffer and add some additional data to the end
-	//INFO: Evidently the API on some versions of Windows is pretty sloppy that checks after the end of path
+	//INFO: Evidently the API on some versions of Windows is pretty sloppy that keeps checking after the end of path!
 	//		Check comments of this page for details:
 	//			http://msdn.microsoft.com/en-us/library/windows/desktop/bb773754(v=vs.85).aspx
 	strPath.resize(nLn + 32);		//Allow additional chars
